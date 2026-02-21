@@ -1,0 +1,31 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "433635b65096",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 4,
+  "files_touched": [
+    "agents/intern/profile.json",
+    "agents/research-assistant/profile.json",
+    "client/src/App.tsx",
+    "client/src/main.tsx",
+    "server/src/lib/AgentRunner.ts",
+    "server/src/routes/missions.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/43/3635b65096/0/metadata.json",
+      "transcript": "/43/3635b65096/0/full.jsonl",
+      "context": "/43/3635b65096/0/context.md",
+      "content_hash": "/43/3635b65096/0/content_hash.txt",
+      "prompt": "/43/3635b65096/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 138,
+    "cache_creation_tokens": 1357594,
+    "cache_read_tokens": 7561075,
+    "output_tokens": 40743,
+    "api_call_count": 105
+  }
+}
