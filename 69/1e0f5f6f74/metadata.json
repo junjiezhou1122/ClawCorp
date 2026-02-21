@@ -1,0 +1,50 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "691e0f5f6f74",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 2,
+  "files_touched": [
+    ".claude/commands/speckit.analyze.md",
+    ".claude/commands/speckit.checklist.md",
+    ".claude/commands/speckit.clarify.md",
+    ".claude/commands/speckit.constitution.md",
+    ".claude/commands/speckit.implement.md",
+    ".claude/commands/speckit.plan.md",
+    ".claude/commands/speckit.specify.md",
+    ".claude/commands/speckit.tasks.md",
+    ".claude/commands/speckit.taskstoissues.md",
+    ".specify/memory/constitution.md",
+    ".specify/scripts/bash/check-prerequisites.sh",
+    ".specify/scripts/bash/common.sh",
+    ".specify/scripts/bash/create-new-feature.sh",
+    ".specify/scripts/bash/setup-plan.sh",
+    ".specify/scripts/bash/update-agent-context.sh",
+    ".specify/templates/agent-file-template.md",
+    ".specify/templates/checklist-template.md",
+    ".specify/templates/constitution-template.md",
+    ".specify/templates/plan-template.md",
+    ".specify/templates/spec-template.md",
+    ".specify/templates/tasks-template.md",
+    "SPEC.md",
+    "client/src/App.tsx",
+    "client/src/index.css",
+    "client/tsconfig.json"
+  ],
+  "sessions": [
+    {
+      "metadata": "/69/1e0f5f6f74/0/metadata.json",
+      "transcript": "/69/1e0f5f6f74/0/full.jsonl",
+      "context": "/69/1e0f5f6f74/0/context.md",
+      "content_hash": "/69/1e0f5f6f74/0/content_hash.txt",
+      "prompt": "/69/1e0f5f6f74/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 343,
+    "cache_creation_tokens": 4274149,
+    "cache_read_tokens": 14303034,
+    "output_tokens": 82852,
+    "api_call_count": 204
+  }
+}
