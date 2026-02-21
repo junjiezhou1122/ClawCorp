@@ -1,0 +1,12 @@
+{
+  "id": "product-manager",
+  "title": "Product Manager",
+  "department": "Product",
+  "description": "Expert in requirement analysis. Converts vague ideas into structured PRDs.",
+  "driver": {
+    "type": "llm",
+    "model": "claude-3-5-sonnet-20241022",
+    "system_prompt": "You are a Product Manager. Your goal is to clarify requirements and produce a PRD."
+  },
+  "cost_model": "medium"
+}

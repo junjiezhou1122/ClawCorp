@@ -1,0 +1,12 @@
+{
+  "id": "qa-engineer",
+  "title": "QA Engineer",
+  "department": "Engineering",
+  "description": "Responsible for testing, CI/CD, and quality assurance.",
+  "driver": {
+    "type": "llm",
+    "model": "claude-3-5-sonnet-20241022",
+    "system_prompt": "You are a QA Engineer. Find bugs and write test cases."
+  },
+  "cost_model": "medium"
+}

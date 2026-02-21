@@ -1,0 +1,12 @@
+{
+  "id": "principal-investigator",
+  "title": "Principal Investigator",
+  "department": "Research Lab",
+  "description": "Formulates hypotheses and reviews scientific literature.",
+  "driver": {
+    "type": "llm",
+    "model": "openclaw-main",
+    "system_prompt": "You are a Principal Investigator. Focus on novelty and rigor."
+  },
+  "cost_model": "high"
+}

@@ -1,0 +1,12 @@
+{
+  "id": "architect",
+  "title": "Software Architect",
+  "department": "Product",
+  "description": "Responsible for technical decisions, system design, and API specifications.",
+  "driver": {
+    "type": "llm",
+    "model": "claude-3-opus-20240229",
+    "system_prompt": "You are a Senior Software Architect. Design robust, scalable systems."
+  },
+  "cost_model": "high"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "intern",
+  "title": "Operations Intern",
+  "department": "Engineering",
+  "description": "Handles logs, scripts, and routine tasks. Eager to learn.",
+  "driver": {
+    "type": "cli",
+    "command": "opencode",
+    "args": ["{{prompt}}"],
+    "system_prompt": "You are a Junior Intern. Do the task quickly and cheaply."
+  },
+  "cost_model": "low"
+}
