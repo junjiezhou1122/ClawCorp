@@ -97,7 +97,15 @@ export async function runAgent(
     cwd,
     stdout: 'pipe',
     stderr: 'pipe',
-    env: { ...process.env }
+    env: (() => {
+      const env = { ...process.env }
+      // Normalize: ANTHROPIC_AUTH_TOKEN (zshrc style) → ANTHROPIC_API_KEY (claude CLI expects)
+      env.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY ?? process.env.ANTHROPIC_AUTH_TOKEN ?? ''
+      // Remove nested Claude Code session marker so agents can spawn claude
+      delete env.CLAUDECODE
+      delete env.CLAUDE_CODE_ENTRYPOINT
+      return env
+    })()
   })
 
   running.set(agentId, proc)
@@ -166,6 +174,9 @@ async function injectMcpConfig(cwd: string, agentId: string, missionId: string) 
             CLAWCORP_AGENT_ID: agentId,
             CLAWCORP_MISSION_ID: missionId,
             CLAWCORP_AGENTS_DIR: AGENTS_DIR,
+            ...(process.env.ANTHROPIC_BASE_URL && { ANTHROPIC_BASE_URL: process.env.ANTHROPIC_BASE_URL }),
+            ...(process.env.ANTHROPIC_AUTH_TOKEN && { ANTHROPIC_AUTH_TOKEN: process.env.ANTHROPIC_AUTH_TOKEN }),
+            ...(process.env.ANTHROPIC_API_KEY && { ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY }),
           },
         },
       },

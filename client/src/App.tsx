@@ -20,6 +20,7 @@ type Message = {
   id: string; from: string; to: string; missionId: string
   type: 'escalate' | 'report'; question: string | null
   context: string | null; summary: string | null
+  artifacts: string[] | null
   status: 'pending' | 'answered' | 'done'
   answer: string | null; created_at: string
 }
@@ -79,7 +80,7 @@ export default function App() {
       .then(d => setAgents(d.map((a: Agent) => ({ ...a, status: 'idle' }))))
       .catch(console.error)
     fetch('/api/missions').then(r => r.json()).then(setMissions).catch(console.error)
-    fetch('/api/messages?to=chairman').then(r => r.json()).then(setMessages).catch(console.error)
+    fetch('/api/messages').then(r => r.json()).then(setMessages).catch(console.error)
   }, [])
 
   useEffect(() => { logsEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [logs])
@@ -114,9 +115,11 @@ export default function App() {
     }
     if (event === 'message:new') {
       const m = data as unknown as Message
-      if (m.to === 'chairman' && m.type === 'escalate') {
-        setMessages(p => [...p, m])
-        appendLog(m.from, m.missionId, `⚠ escalated: ${m.question}`, 'system')
+      setMessages(p => [...p, m])
+      if (m.type === 'escalate') {
+        appendLog(m.from, m.missionId, `⚠ escalated → ${m.to}: ${m.question}`, 'system')
+      } else if (m.type === 'report') {
+        appendLog(m.from, m.missionId, `✓ reported → ${m.to}: ${m.summary}`, 'system')
       }
     }
     if (event === 'mission:done') {
@@ -317,29 +320,35 @@ export default function App() {
           {/* ── INBOX TAB ── */}
           {tab === 'inbox' && (
             <section>
-              <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-4">Chairman Inbox</h2>
+              <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-4">Organization Inbox</h2>
               {messages.length === 0 && (
                 <p className="text-zinc-600 text-sm">No messages. Agents are working autonomously.</p>
               )}
               <div className="space-y-3">
                 {messages.map(msg => (
-                  <div key={msg.id} className={`border rounded-lg p-4 space-y-2 ${msg.status === 'pending' ? 'border-amber-700 bg-amber-950/20' : 'border-zinc-800 bg-zinc-900'}`}>
+                  <div key={msg.id} className={`border rounded-lg p-4 space-y-2 ${msg.status === 'pending' && msg.type === 'escalate' ? 'border-amber-700 bg-amber-950/20' : msg.type === 'report' ? 'border-emerald-800 bg-emerald-950/20' : 'border-zinc-800 bg-zinc-900'}`}>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-bold text-amber-400">{msg.from}</span>
-                        <span className="text-xs text-zinc-500">→ escalate</span>
+                        <span className="text-xs text-zinc-500">→ {msg.to}</span>
+                        <span className={`text-xs px-1.5 py-0.5 rounded ${msg.type === 'report' ? 'bg-emerald-900 text-emerald-300' : 'bg-amber-900 text-amber-300'}`}>{msg.type}</span>
                         <span className="text-xs text-zinc-600">{msg.missionId}</span>
                       </div>
                       <span className={`text-xs px-2 py-0.5 rounded-full ${msg.status === 'pending' ? 'bg-amber-800 text-amber-200' : 'bg-zinc-700 text-zinc-400'}`}>
                         {msg.status}
                       </span>
                     </div>
-                    <p className="text-sm text-zinc-200">{msg.question}</p>
+                    <p className="text-sm text-zinc-200">{msg.type === 'report' ? msg.summary : msg.question}</p>
                     {msg.context && <p className="text-xs text-zinc-500 italic">{msg.context}</p>}
+                    {msg.artifacts && msg.artifacts.length > 0 && (
+                      <div className="text-xs text-zinc-500 space-y-0.5">
+                        {(msg.artifacts as string[]).map((a, i) => <div key={i} className="font-mono">{a}</div>)}
+                      </div>
+                    )}
                     {msg.status === 'answered' && (
                       <p className="text-sm text-emerald-400">✓ {msg.answer}</p>
                     )}
-                    {msg.status === 'pending' && (
+                    {msg.status === 'pending' && msg.type === 'escalate' && (
                       <button onClick={() => setAnswerTarget(msg)}
                         className="text-xs bg-amber-600 hover:bg-amber-500 text-white rounded px-3 py-1.5 transition-colors">
                         Answer
