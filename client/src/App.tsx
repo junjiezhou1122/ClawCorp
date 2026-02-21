@@ -16,6 +16,8 @@ type Mission = {
   status: string
   current_stage: string
   assignee: string | null
+  workspace: string | null
+  sessions: Record<string, string>
 }
 
 type LogLine = {
@@ -49,16 +51,22 @@ export default function App() {
   const [logs, setLogs] = useState<LogLine[]>([])
   const [newTitle, setNewTitle] = useState('')
   const [newType, setNewType] = useState<'engineering' | 'research'>('engineering')
-  const [runTarget, setRunTarget] = useState<{ missionId: string; prompt: string } | null>(null)
+  const [newWorkspace, setNewWorkspace] = useState('')
+  const [runTarget, setRunTarget] = useState<{ missionId: string; prompt: string; workspace: string; sessions: Record<string, string> } | null>(null)
   const [selectedAgent, setSelectedAgent] = useState('')
+  const [resumeSession, setResumeSession] = useState(false)
   const logsEndRef = useRef<HTMLDivElement>(null)
 
   // Fetch initial data
   useEffect(() => {
-    fetch('/api/agents').then((r) => r.json()).then((data) =>
-      setAgents(data.map((a: Agent) => ({ ...a, status: 'idle' })))
-    )
-    fetch('/api/missions').then((r) => r.json()).then(setMissions)
+    fetch('/api/agents')
+      .then((r) => r.json())
+      .then((data) => setAgents(data.map((a: Agent) => ({ ...a, status: 'idle' }))))
+      .catch((e) => console.error('Failed to load agents:', e))
+    fetch('/api/missions')
+      .then((r) => r.json())
+      .then(setMissions)
+      .catch((e) => console.error('Failed to load missions:', e))
   }, [])
 
   // Auto-scroll logs
@@ -91,11 +99,16 @@ export default function App() {
         prev.map((a) => (a.id === d.agentId ? { ...a, status: 'idle' } : a))
       )
       setMissions((prev) =>
-        prev.map((m) =>
-          m.id === d.missionId ? { ...m, current_stage: 'done', status: 'done' } : m
-        )
+        prev.map((m) => {
+          if (m.id !== d.missionId) return m
+          const updated = { ...m, current_stage: 'done', status: 'done' }
+          if (d.sessionId) {
+            updated.sessions = { ...m.sessions, [d.agentId]: d.sessionId }
+          }
+          return updated
+        })
       )
-      appendLog(d.agentId, d.missionId, `■ Agent done (exit ${d.exitCode})`, 'system')
+      appendLog(d.agentId, d.missionId, `■ Agent done (exit ${d.exitCode})${d.sessionId ? ` · session: ${d.sessionId}` : ''}`, 'system')
     }
 
     if (event === 'agent:killed') {
@@ -115,15 +128,17 @@ export default function App() {
     const res = await fetch('/api/missions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: newTitle, type: newType }),
+      body: JSON.stringify({ title: newTitle, type: newType, workspace: newWorkspace || null }),
     })
     const m = await res.json()
     setMissions((prev) => [...prev, m])
     setNewTitle('')
+    setNewWorkspace('')
   }
 
   async function startRun() {
     if (!runTarget || !selectedAgent) return
+    const sessionId = resumeSession ? runTarget.sessions[selectedAgent] : undefined
     await fetch('/api/run', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -131,6 +146,9 @@ export default function App() {
         agentId: selectedAgent,
         missionId: runTarget.missionId,
         prompt: runTarget.prompt,
+        workspace: runTarget.workspace || undefined,
+        resume: resumeSession && !sessionId,
+        sessionId,
       }),
     })
     setMissions((prev) =>
@@ -142,6 +160,7 @@ export default function App() {
     )
     setRunTarget(null)
     setSelectedAgent('')
+    setResumeSession(false)
   }
 
   const missionsByStage = STAGES.reduce(
@@ -225,13 +244,19 @@ export default function App() {
             <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-3">
               New Mission
             </h2>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <input
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && createMission()}
                 placeholder="Mission title..."
-                className="flex-1 bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-400"
+                className="flex-1 min-w-40 bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-400"
+              />
+              <input
+                value={newWorkspace}
+                onChange={(e) => setNewWorkspace(e.target.value)}
+                placeholder="Workspace path (optional)..."
+                className="flex-1 min-w-52 bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm font-mono text-zinc-400 focus:outline-none focus:border-zinc-400"
               />
               <select
                 value={newType}
@@ -288,13 +313,28 @@ export default function App() {
                             {m.type}
                           </span>
                         </div>
+                        {m.workspace && (
+                          <p className="text-xs text-zinc-600 font-mono truncate" title={m.workspace}>
+                            📁 {m.workspace.replace(process.env.HOME ?? '', '~')}
+                          </p>
+                        )}
                         {m.assignee && (
                           <p className="text-xs text-zinc-500">→ {m.assignee}</p>
+                        )}
+                        {Object.keys(m.sessions ?? {}).length > 0 && (
+                          <p className="text-xs text-violet-400">
+                            ↩ {Object.keys(m.sessions).length} session{Object.keys(m.sessions).length > 1 ? 's' : ''}
+                          </p>
                         )}
                         {stage !== 'done' && (
                           <button
                             onClick={() =>
-                              setRunTarget({ missionId: m.id, prompt: m.title })
+                              setRunTarget({
+                                missionId: m.id,
+                                prompt: m.title,
+                                workspace: m.workspace ?? '',
+                                sessions: m.sessions ?? {},
+                              })
                             }
                             className="w-full text-xs bg-zinc-700 hover:bg-zinc-600 rounded px-2 py-1 transition-colors"
                           >
@@ -356,27 +396,57 @@ export default function App() {
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
           <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-6 w-full max-w-md space-y-4">
             <h3 className="font-semibold">Run Mission</h3>
-            <p className="text-sm text-zinc-400">Mission: {runTarget.missionId}</p>
+            <p className="text-sm text-zinc-400">{runTarget.missionId}</p>
 
-            <div className="space-y-2">
-              <label className="text-xs text-zinc-500">Assign to Agent</label>
+            {/* Workspace */}
+            <div className="space-y-1.5">
+              <label className="text-xs text-zinc-500">Workspace (cwd)</label>
+              <input
+                value={runTarget.workspace}
+                onChange={(e) => setRunTarget({ ...runTarget, workspace: e.target.value })}
+                placeholder="/path/to/project"
+                className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm font-mono text-zinc-300 focus:outline-none focus:border-zinc-500"
+              />
+            </div>
+
+            {/* Agent */}
+            <div className="space-y-1.5">
+              <label className="text-xs text-zinc-500">Agent</label>
               <select
                 value={selectedAgent}
-                onChange={(e) => setSelectedAgent(e.target.value)}
+                onChange={(e) => { setSelectedAgent(e.target.value); setResumeSession(false) }}
                 className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm"
               >
                 <option value="">Select agent...</option>
-                {agents
-                  .filter((a) => a.status === 'idle')
-                  .map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.title}
-                    </option>
-                  ))}
+                {agents.map((a) => (
+                  <option key={a.id} value={a.id} disabled={a.status === 'running'}>
+                    {a.title}{a.status === 'running' ? ' (busy)' : ''}
+                  </option>
+                ))}
               </select>
             </div>
 
-            <div className="space-y-2">
+            {/* Resume session */}
+            {selectedAgent && (
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="resume"
+                  checked={resumeSession}
+                  onChange={(e) => setResumeSession(e.target.checked)}
+                  className="accent-violet-500"
+                />
+                <label htmlFor="resume" className="text-xs text-zinc-400 cursor-pointer">
+                  Resume session
+                  {runTarget.sessions[selectedAgent]
+                    ? ` · ${runTarget.sessions[selectedAgent].slice(0, 8)}…`
+                    : ' (continue last)'}
+                </label>
+              </div>
+            )}
+
+            {/* Prompt */}
+            <div className="space-y-1.5">
               <label className="text-xs text-zinc-500">Prompt</label>
               <textarea
                 value={runTarget.prompt}
@@ -388,7 +458,7 @@ export default function App() {
 
             <div className="flex gap-2 justify-end">
               <button
-                onClick={() => { setRunTarget(null); setSelectedAgent('') }}
+                onClick={() => { setRunTarget(null); setSelectedAgent(''); setResumeSession(false) }}
                 className="px-4 py-2 text-sm text-zinc-400 hover:text-zinc-200"
               >
                 Cancel

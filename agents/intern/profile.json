@@ -6,7 +6,7 @@
   "driver": {
     "type": "cli",
     "command": "opencode",
-    "args": ["{{prompt}}"],
+    "args": ["run", "{{prompt}}"],
     "system_prompt": "You are a Junior Intern. Do the task quickly and cheaply."
   },
   "cost_model": "low"

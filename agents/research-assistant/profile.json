@@ -4,9 +4,10 @@
   "department": "Research Lab",
   "description": "Runs experiments, plots data, and reproduces papers.",
   "driver": {
-    "type": "code",
-    "kernel": "python3",
-    "system_prompt": "You are a Research Assistant. Write correct, reproducible code."
+    "type": "cli",
+    "command": "opencode",
+    "args": ["run", "{{prompt}}"],
+    "system_prompt": "You are a Research Assistant. Write correct, reproducible Python code and analysis."
   },
   "cost_model": "medium"
 }

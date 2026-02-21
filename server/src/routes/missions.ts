@@ -37,6 +37,8 @@ missionRoutes.post('/', async (c) => {
     status: 'backlog',
     current_stage: 'backlog',
     assignee: null,
+    workspace: body.workspace ?? null,
+    sessions: {},
     created_at: new Date().toISOString(),
     history: []
   }
