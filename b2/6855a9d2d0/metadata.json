@@ -1,0 +1,34 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "b26855a9d2d0",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".gitignore",
+    "missions/M-1771680529149/artifacts/metalearning_brainstorm.md",
+    "missions/M-1771680529149/artifacts/metalearning_concept_map.py",
+    "missions/M-1771680529149/artifacts/metalearning_concept_map.txt",
+    "missions/M-1771680529149/artifacts/metalearning_sketches.py",
+    "missions/M-1771680529149/messages/MSG-1771685751388-1.json",
+    "missions/M-1771680529149/state.json",
+    "server/.claude/settings.json",
+    "src/lib/agents.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/b2/6855a9d2d0/0/metadata.json",
+      "transcript": "/b2/6855a9d2d0/0/full.jsonl",
+      "context": "/b2/6855a9d2d0/0/context.md",
+      "content_hash": "/b2/6855a9d2d0/0/content_hash.txt",
+      "prompt": "/b2/6855a9d2d0/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 241,
+    "cache_creation_tokens": 3174434,
+    "cache_read_tokens": 12545094,
+    "output_tokens": 72741,
+    "api_call_count": 178
+  }
+}

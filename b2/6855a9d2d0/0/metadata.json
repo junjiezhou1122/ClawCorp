@@ -1,0 +1,39 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "b26855a9d2d0",
+  "session_id": "442f141c-908d-431c-b446-8675c95fdcc8",
+  "strategy": "manual-commit",
+  "created_at": "2026-02-21T15:15:20.866718Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".gitignore",
+    "missions/M-1771680529149/artifacts/metalearning_concept_map.py",
+    "missions/M-1771680529149/artifacts/metalearning_concept_map.txt",
+    "missions/M-1771680529149/artifacts/metalearning_sketches.py",
+    "missions/M-1771680529149/messages/MSG-1771685751388-1.json",
+    "missions/M-1771680529149/state.json",
+    "missions/M-1771680529149/artifacts/metalearning_brainstorm.md",
+    "server/.claude/settings.json",
+    "src/lib/agents.ts"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "5854c1f0f699",
+  "token_usage": {
+    "input_tokens": 241,
+    "cache_creation_tokens": 3174434,
+    "cache_read_tokens": 12545094,
+    "output_tokens": 72741,
+    "api_call_count": 178
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-02-21T15:15:20.521694Z",
+    "agent_lines": 0,
+    "human_added": 0,
+    "human_modified": 5,
+    "human_removed": 1061,
+    "total_committed": 0,
+    "agent_percentage": 0
+  },
+  "transcript_path": ".claude/projects/-Users-junjie-research-ClawCorp/442f141c-908d-431c-b446-8675c95fdcc8.jsonl"
+}
