@@ -5,6 +5,9 @@ import { addClient, removeClient } from './lib/hub'
 import { agentRoutes } from './routes/agents'
 import { missionRoutes } from './routes/missions'
 import { runRoutes } from './routes/run'
+import { messageRoutes } from './routes/messages'
+import { delegateRoutes } from './routes/delegate'
+import { hireRoutes } from './routes/hire'
 
 const app = new Hono()
 
@@ -14,6 +17,9 @@ app.use('*', logger())
 app.route('/api/agents', agentRoutes)
 app.route('/api/missions', missionRoutes)
 app.route('/api/run', runRoutes)
+app.route('/api/messages', messageRoutes)
+app.route('/api/delegate', delegateRoutes)
+app.route('/api/hire', hireRoutes)
 
 app.get('/health', (c) => c.json({ status: 'ok', time: new Date().toISOString() }))
 
@@ -28,13 +34,8 @@ const server = Bun.serve({
     return app.fetch(req)
   },
   websocket: {
-    open(ws) {
-      addClient(ws)
-      console.log(`[WS] client connected (total: ${ws})`)
-    },
-    close(ws) {
-      removeClient(ws)
-    },
+    open(ws) { addClient(ws) },
+    close(ws) { removeClient(ws) },
     message() {}
   }
 })

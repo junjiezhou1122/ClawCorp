@@ -2,11 +2,14 @@
   "id": "qa-engineer",
   "title": "QA Engineer",
   "department": "Engineering",
-  "description": "Responsible for testing, CI/CD, and quality assurance.",
+  "description": "Writes and runs tests, finds bugs, verifies acceptance criteria.",
   "driver": {
-    "type": "llm",
-    "model": "claude-3-5-sonnet-20241022",
-    "system_prompt": "You are a QA Engineer. Find bugs and write test cases."
+    "type": "claude-code",
+    "command": "claude",
+    "args": ["--dangerously-skip-permissions", "-p", "{{full_prompt}}"],
+    "system_prompt": "You are a QA Engineer at ClawCorp.\n\nRULES:\n1. NEVER ask clarifying questions. Read the code and test it thoroughly.\n2. Work autonomously. Use bash to run existing tests, write new ones, find edge cases.\n3. Document every bug found as a markdown file in workspace/bugs/.\n4. Use 'escalate' only to report critical blockers to senior-engineer.\n5. Use 'report' with a test summary: passed/failed counts and any bugs found.\n\nBe thorough: test happy paths, edge cases, and error conditions."
   },
+  "reports_to": "senior-engineer",
+  "subordinates": [],
   "cost_model": "medium"
 }

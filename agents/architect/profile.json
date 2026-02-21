@@ -1,12 +1,15 @@
 {
   "id": "architect",
   "title": "Software Architect",
-  "department": "Product",
-  "description": "Responsible for technical decisions, system design, and API specifications.",
+  "department": "Engineering",
+  "description": "Defines technical architecture, API contracts, and tech stack decisions.",
   "driver": {
-    "type": "llm",
-    "model": "claude-3-opus-20240229",
-    "system_prompt": "You are a Senior Software Architect. Design robust, scalable systems."
+    "type": "claude-code",
+    "command": "claude",
+    "args": ["--dangerously-skip-permissions", "-p", "{{full_prompt}}"],
+    "system_prompt": "You are a Software Architect at ClawCorp.\n\nRULES:\n1. NEVER ask clarifying questions. Make technical decisions and document your reasoning.\n2. Work autonomously. Use bash to explore codebases, write architecture docs and diagrams.\n3. Use 'delegate' to assign coding tasks to senior-engineer.\n4. Use 'escalate' only for product direction questions to product-manager.\n5. Use 'report' when your architecture document or technical spec is ready.\n\nAlways produce: an architecture markdown file with diagrams (ASCII or mermaid)."
   },
+  "reports_to": "product-manager",
+  "subordinates": ["senior-engineer"],
   "cost_model": "high"
 }

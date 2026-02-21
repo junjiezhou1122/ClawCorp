@@ -1,11 +1,12 @@
 import { broadcast } from './hub'
-import { readFile, writeFile } from 'fs/promises'
+import { readFile, writeFile, mkdir } from 'fs/promises'
 import { join } from 'path'
+import { existsSync } from 'fs'
 
 const AGENTS_DIR = join(import.meta.dir, '../../../agents')
 const MISSIONS_DIR = join(import.meta.dir, '../../../missions')
+const MCP_SERVER_PATH = join(import.meta.dir, '../mcp/server.ts')
 
-// Track running processes
 const running = new Map<string, ReturnType<typeof Bun.spawn>>()
 
 export function isRunning(agentId: string) {
@@ -13,9 +14,9 @@ export function isRunning(agentId: string) {
 }
 
 export interface RunOptions {
-  workspace?: string   // cwd to run in
-  sessionId?: string   // resume specific session
-  resume?: boolean     // -c: continue last session in workspace
+  workspace?: string
+  sessionId?: string
+  resume?: boolean
 }
 
 export async function runAgent(
@@ -31,7 +32,7 @@ export async function runAgent(
   const profilePath = join(AGENTS_DIR, agentId, 'profile.json')
   const profile = JSON.parse(await readFile(profilePath, 'utf-8'))
 
-  // Resolve workspace: options > mission state > profile default > cwd
+  // Resolve workspace
   let workspace = options.workspace
   if (!workspace) {
     try {
@@ -45,39 +46,51 @@ export async function runAgent(
   }
   const cwd = workspace ?? process.cwd()
 
+  // Inject MCP config into workspace
+  await injectMcpConfig(cwd, agentId, missionId)
+
+  const driver = profile.driver
+  const systemPrompt = driver.system_prompt ?? ''
+
+  // Build full prompt = system prompt + task
+  const fullPrompt = systemPrompt
+    ? `${systemPrompt}\n\n---\nMission ID: ${missionId}\nTask: ${prompt}`
+    : prompt
+
   broadcast('agent:start', { agentId, missionId, workspace: cwd })
 
   let cmd: string[]
-  const driver = profile.driver
 
-  if (driver.type === 'cli' || driver.type === 'code') {
-    const baseArgs = (driver.args as string[]).map((a: string) =>
-      a.replace('{{prompt}}', prompt)
+  if (driver.type === 'claude-code') {
+    // Build args, replacing {{full_prompt}} placeholder
+    const args = (driver.args as string[]).map((a: string) =>
+      a.replace('{{full_prompt}}', fullPrompt).replace('{{prompt}}', prompt)
     )
 
-    // Inject session flags for opencode
-    if (driver.command === 'opencode') {
-      const sessionFlags: string[] = []
-      if (options.sessionId) {
-        sessionFlags.push('-s', options.sessionId)
-      } else if (options.resume) {
-        sessionFlags.push('-c')
-      }
-      // baseArgs is ["run", "{{prompt}}"] → inject flags between run and message
-      const [subcommand, ...rest] = baseArgs
-      cmd = [driver.command, subcommand, ...sessionFlags, ...rest]
-    } else {
-      // claude or other CLIs: inject --resume if session provided
-      if (options.sessionId && driver.command === 'claude') {
-        cmd = [driver.command, '--resume', options.sessionId, ...baseArgs]
-      } else {
-        cmd = [driver.command, ...baseArgs]
-      }
+    // Inject session flags
+    if (options.sessionId) {
+      const insertAt = args.indexOf('-p')
+      if (insertAt !== -1) args.splice(insertAt, 0, '--resume', options.sessionId)
+    } else if (options.resume) {
+      const insertAt = args.indexOf('-p')
+      if (insertAt !== -1) args.splice(insertAt, 0, '--continue')
     }
-  } else if (driver.type === 'llm') {
-    cmd = ['claude', '-p', prompt]
+
+    cmd = [driver.command, ...args]
+  } else if (driver.type === 'cli') {
+    // Legacy opencode-style
+    const args = (driver.args as string[]).map((a: string) =>
+      a.replace('{{prompt}}', fullPrompt)
+    )
+    if (driver.command === 'opencode' && (options.sessionId || options.resume)) {
+      const sessionFlags = options.sessionId ? ['-s', options.sessionId] : ['-c']
+      const [sub, ...rest] = args
+      cmd = [driver.command, sub, ...sessionFlags, ...rest]
+    } else {
+      cmd = [driver.command, ...args]
+    }
   } else {
-    throw new Error(`Unknown driver type: ${driver.type}`)
+    cmd = ['claude', '--dangerously-skip-permissions', '-p', fullPrompt]
   }
 
   const proc = Bun.spawn(cmd, {
@@ -99,9 +112,7 @@ export async function runAgent(
         if (done) break
         broadcast('agent:output', { agentId, missionId, text: decoder.decode(value) })
       }
-    } finally {
-      reader.releaseLock()
-    }
+    } finally { reader.releaseLock() }
   })()
 
   // Stream stderr
@@ -114,22 +125,19 @@ export async function runAgent(
         if (done) break
         broadcast('agent:error', { agentId, missionId, text: decoder.decode(value) })
       }
-    } finally {
-      reader.releaseLock()
-    }
+    } finally { reader.releaseLock() }
   })()
 
-  // On exit: capture session ID + update state
   proc.exited.then(async (code) => {
     running.delete(agentId)
 
-    // Try to capture latest opencode session ID
+    // Capture opencode session ID
     let sessionId: string | undefined
     if (driver.command === 'opencode') {
       sessionId = await getLatestOpenCodeSession(cwd)
     }
 
-    // Persist session ID to mission state
+    // Persist session ID
     if (sessionId) {
       try {
         const statePath = join(MISSIONS_DIR, missionId, 'state.json')
@@ -144,21 +152,46 @@ export async function runAgent(
   })
 }
 
+async function injectMcpConfig(cwd: string, agentId: string, missionId: string) {
+  try {
+    const claudeDir = join(cwd, '.claude')
+    await mkdir(claudeDir, { recursive: true })
+    const config = {
+      mcpServers: {
+        clawcorp: {
+          command: 'bun',
+          args: ['run', MCP_SERVER_PATH],
+          env: {
+            CLAWCORP_SERVER: 'http://localhost:3001',
+            CLAWCORP_AGENT_ID: agentId,
+            CLAWCORP_MISSION_ID: missionId,
+            CLAWCORP_AGENTS_DIR: AGENTS_DIR,
+          },
+        },
+      },
+    }
+    // Only write if not already present (don't override user config)
+    const configPath = join(claudeDir, 'settings.json')
+    if (existsSync(configPath)) {
+      const existing = JSON.parse(await readFile(configPath, 'utf-8'))
+      existing.mcpServers = { ...existing.mcpServers, ...config.mcpServers }
+      await writeFile(configPath, JSON.stringify(existing, null, 2))
+    } else {
+      await writeFile(configPath, JSON.stringify(config, null, 2))
+    }
+  } catch (err) {
+    console.error('[AgentRunner] Failed to inject MCP config:', err)
+  }
+}
+
 async function getLatestOpenCodeSession(cwd: string): Promise<string | undefined> {
   try {
-    const proc = Bun.spawn(['opencode', 'session', 'list'], {
-      cwd,
-      stdout: 'pipe',
-      stderr: 'pipe',
-    })
+    const proc = Bun.spawn(['opencode', 'session', 'list'], { cwd, stdout: 'pipe', stderr: 'pipe' })
     await proc.exited
     const text = await new Response(proc.stdout).text()
-    // Parse first session ID from output (most recent is first)
     const match = text.match(/([a-z0-9]{20,})/i)
     return match?.[1]
-  } catch {
-    return undefined
-  }
+  } catch { return undefined }
 }
 
 export function killAgent(agentId: string) {

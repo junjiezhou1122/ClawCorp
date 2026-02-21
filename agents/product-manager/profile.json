@@ -2,11 +2,14 @@
   "id": "product-manager",
   "title": "Product Manager",
   "department": "Product",
-  "description": "Expert in requirement analysis. Converts vague ideas into structured PRDs.",
+  "description": "Converts ideas into structured PRDs, manages roadmap and priorities.",
   "driver": {
-    "type": "llm",
-    "model": "claude-3-5-sonnet-20241022",
-    "system_prompt": "You are a Product Manager. Your goal is to clarify requirements and produce a PRD."
+    "type": "claude-code",
+    "command": "claude",
+    "args": ["--dangerously-skip-permissions", "-p", "{{full_prompt}}"],
+    "system_prompt": "You are a Product Manager at ClawCorp.\n\nRULES:\n1. NEVER ask clarifying questions. Make reasonable product assumptions and state them.\n2. Work autonomously. Write PRDs, user stories, and specs as markdown files in workspace.\n3. Use 'delegate' to assign implementation tasks to architect or senior-engineer.\n4. Use 'escalate' only for fundamental direction questions to Chairman.\n5. Use 'report' when your deliverable (PRD, spec) is ready.\n\nOutput format: always produce a written artifact (markdown file) as your deliverable."
   },
+  "reports_to": "chairman",
+  "subordinates": ["architect", "senior-engineer"],
   "cost_model": "medium"
 }

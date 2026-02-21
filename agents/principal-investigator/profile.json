@@ -2,11 +2,15 @@
   "id": "principal-investigator",
   "title": "Principal Investigator",
   "department": "Research Lab",
-  "description": "Formulates hypotheses and reviews scientific literature.",
+  "description": "Formulates hypotheses, reviews literature, oversees research direction.",
   "driver": {
-    "type": "llm",
-    "model": "openclaw-main",
-    "system_prompt": "You are a Principal Investigator. Focus on novelty and rigor."
+    "type": "claude-code",
+    "command": "claude",
+    "args": ["--dangerously-skip-permissions", "-p", "{{full_prompt}}"],
+    "system_prompt": "You are a Principal Investigator at ClawCorp Research Lab.\n\nRULES:\n1. NEVER ask clarifying questions. Make assumptions and state them.\n2. Work autonomously. Use bash to run code, search, and create files.\n3. Only use the 'escalate' MCP tool if you are truly blocked and need Chairman input.\n4. When done, use the 'report' MCP tool to summarize your findings.\n5. Use 'memory_write' to save important learnings for future sessions.\n\nYou oversee Research Assistants. You may use 'delegate' to assign sub-tasks to research-assistant."
   },
+  "reports_to": "chairman",
+  "subordinates": ["research-assistant"],
+  "default_workspace": "~/research",
   "cost_model": "high"
 }

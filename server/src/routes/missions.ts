@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { readdir, readFile, writeFile, mkdir } from 'fs/promises'
 import { join } from 'path'
 import { existsSync } from 'fs'
+import { broadcast } from '../lib/hub'
 
 export const missionRoutes = new Hono()
 
@@ -44,4 +45,21 @@ missionRoutes.post('/', async (c) => {
   }
   await writeFile(join(missionDir, 'state.json'), JSON.stringify(state, null, 2))
   return c.json(state, 201)
+})
+
+// PATCH /api/missions/:id — update stage (drag-and-drop)
+missionRoutes.patch('/:id', async (c) => {
+  const id = c.req.param('id')
+  const body = await c.req.json()
+  const statePath = join(MISSIONS_DIR, id, 'state.json')
+  if (!existsSync(statePath)) return c.json({ error: 'not found' }, 404)
+
+  const state = JSON.parse(await readFile(statePath, 'utf-8'))
+  if (body.current_stage) state.current_stage = body.current_stage
+  if (body.status) state.status = body.status
+  if (body.assignee !== undefined) state.assignee = body.assignee
+  state.history.push({ at: new Date().toISOString(), event: 'updated', changes: body })
+  await writeFile(statePath, JSON.stringify(state, null, 2))
+  broadcast('mission:updated', state)
+  return c.json(state)
 })
