@@ -1,0 +1,37 @@
+first see the readme.md file and then let's think faster!
+
+---
+
+I think we can re build it, let's first rethink about this project! And think about what language or framework should we use to build this project
+
+---
+
+why not recommend other language like rust or go to build backend??
+
+---
+
+Do u think next.js is also a good choice?
+
+---
+
+Now, think again deeply and give me some advice, Maybe in the future i will run many agents simlutanously! it must be quickly for this
+
+---
+
+But go is not good for some ai tools, typescript sometimes is better, like claude code or other tools they all use typescript!
+
+---
+
+Then what's the strength of Go
+
+---
+
+So I think hono and bun has not big difference between next.js
+
+---
+
+So I wanna change let's use the bun+hono + react + vite, delete all my code now, let's rebuild it!
+
+---
+
+下面先帮我git commit 一个版本 我刚刚还遇到点问题！
