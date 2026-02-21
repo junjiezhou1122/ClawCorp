@@ -1,0 +1,33 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "9eb1a92c8544",
+  "session_id": "442f141c-908d-431c-b446-8675c95fdcc8",
+  "strategy": "manual-commit",
+  "created_at": "2026-02-21T15:14:54.868852Z",
+  "branch": "main",
+  "checkpoints_count": 5,
+  "files_touched": [
+    "client/src/App.tsx",
+    "missions/M-1771680529149/artifacts/metalearning_sketches.py",
+    "server/src/lib/AgentRunner.ts"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "5854c1f0f699",
+  "token_usage": {
+    "input_tokens": 238,
+    "cache_creation_tokens": 3098482,
+    "cache_read_tokens": 12392619,
+    "output_tokens": 72067,
+    "api_call_count": 175
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-02-21T15:14:54.509278Z",
+    "agent_lines": 370,
+    "human_added": 1290,
+    "human_modified": 2,
+    "human_removed": 0,
+    "total_committed": 1662,
+    "agent_percentage": 22.26233453670277
+  },
+  "transcript_path": ".claude/projects/-Users-junjie-research-ClawCorp/442f141c-908d-431c-b446-8675c95fdcc8.jsonl"
+}
