@@ -453,6 +453,47 @@ export default function App() {
   const pendingMessages = messages.filter((m) => m.status === 'pending')
   const runningAgents = agents.filter((a) => a.status === 'running')
 
+  function renderAgentNode(agent: Agent, allAgents: Agent[], depth: number): React.ReactNode {
+    const children = allAgents.filter((a) => a.reports_to === agent.id)
+    return (
+      <div key={agent.id} className="relative pl-6 pt-3">
+        {/* Connector line */}
+        <div className="absolute left-0 top-6 h-px w-6 bg-[#d8e6dc]" />
+
+        <div className={`rounded-xl border p-3 ${agent.status === 'running' ? 'border-[#7fd4a0] bg-[#f0fdf4]' : 'border-[#d8e6dc] bg-white'}`}>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className={`h-2.5 w-2.5 rounded-full ${agent.status === 'running' ? 'bg-[#35bf68] animate-dot' : 'bg-[#abc8b4]'}`} />
+              <span className="text-sm font-bold text-[#26372d]">{agent.title}</span>
+              <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${DEPT_THEME[agent.department] ?? 'bg-[#e7f2ea] text-[#446658]'}`}>
+                {agent.department}
+              </span>
+            </div>
+            <button onClick={() => fireAgent(agent.id)} className="text-[11px] font-semibold text-[#9d5d52] hover:text-[#b44136]">
+              fire
+            </button>
+          </div>
+          <p className="mt-1 font-mono text-[10.5px] text-[#6f887b]">{agent.id}</p>
+          <p className="mt-0.5 text-xs leading-relaxed text-[#647d71]">{agent.description}</p>
+          {agent.status === 'running' && (
+            <button
+              onClick={() => fetch(`/api/run/${agent.id}`, { method: 'DELETE' })}
+              className="btn-base btn-danger mt-2 py-1 text-xs"
+            >
+              Kill session
+            </button>
+          )}
+        </div>
+
+        {children.length > 0 && (
+          <div className="ml-4 border-l-2 border-[#d8e6dc]">
+            {children.map((child) => renderAgentNode(child, allAgents, depth + 1))}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="app-shell">
       <div className="shell-card">
@@ -560,55 +601,41 @@ export default function App() {
             {tab === 'agents' && (
               <section className="space-y-3 pt-1">
                 <div className="flex items-center justify-between">
-                  <div className="section-label">Team ({agents.length})</div>
+                  <div className="section-label">Organization ({agents.length})</div>
                   <button onClick={() => setShowHire(true)} className="btn-base btn-primary py-1.5 text-xs">
                     + Hire Agent
                   </button>
                 </div>
 
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3">
-                  {agents.map((agent, idx) => (
-                    <article key={agent.id} className="panel animate-rise overflow-hidden p-0" style={{ animationDelay: `${idx * 0.02}s` }}>
-                      <div className={`h-1.5 ${agent.status === 'running' ? 'bg-[#39c96f]' : 'bg-[#badac5]'}`} />
-                      <div className="p-4">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span
-                              className={`h-2.5 w-2.5 rounded-full ${
-                                agent.status === 'running' ? 'bg-[#35bf68] animate-dot' : 'bg-[#abc8b4]'
-                              }`}
-                            />
-                            <span
-                              className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                                DEPT_THEME[agent.department] ?? 'bg-[#e7f2ea] text-[#446658]'
-                              }`}
-                            >
-                              {agent.department}
-                            </span>
-                          </div>
+                {/* Org tree */}
+                <div className="panel animate-rise p-4">
+                  {/* Chairman root */}
+                  <div className="flex items-center gap-2 rounded-xl border border-[#d4c9a8] bg-[#fdf8ec] px-4 py-3">
+                    <span className="h-3 w-3 rounded-full bg-[#d4aa4f]" />
+                    <span className="text-base font-bold text-[#5a4b1e]">Chairman</span>
+                    <span className="rounded-full bg-[#f0e4be] px-2 py-0.5 text-[11px] font-semibold text-[#8a7328]">You</span>
+                  </div>
 
-                          <button onClick={() => fireAgent(agent.id)} className="text-xs font-semibold text-[#9d5d52] hover:text-[#b44136]">
-                            fire
-                          </button>
-                        </div>
+                  {/* Direct reports to chairman */}
+                  <div className="ml-6 border-l-2 border-[#d8e6dc]">
+                    {agents
+                      .filter((a) => a.reports_to === 'chairman')
+                      .map((agent) => renderAgentNode(agent, agents, 0))}
+                  </div>
 
-                        <p className="mt-2 text-base font-bold text-[#26372d]">{agent.title}</p>
-                        <p className="mt-1 font-mono text-[11px] text-[#6f887b]">{agent.id}</p>
-                        <p className="mt-1 text-xs leading-relaxed text-[#647d71]">{agent.description}</p>
-
-                        {agent.reports_to && <p className="mt-2 text-xs text-[#527163]">reports to {agent.reports_to}</p>}
-
-                        {agent.status === 'running' && (
-                          <button
-                            onClick={() => fetch(`/api/run/${agent.id}`, { method: 'DELETE' })}
-                            className="btn-base btn-danger mt-3 w-full py-1.5 text-xs"
-                          >
-                            Kill session
-                          </button>
-                        )}
+                  {/* Orphans (no reports_to or reports_to not found) */}
+                  {agents
+                    .filter((a) => a.reports_to && a.reports_to !== 'chairman' && !agents.some((p) => p.id === a.reports_to))
+                    .length > 0 && (
+                    <div className="mt-4">
+                      <div className="section-label text-[11px]">Unlinked</div>
+                      <div className="ml-6 border-l-2 border-dashed border-[#e0d8c8]">
+                        {agents
+                          .filter((a) => a.reports_to && a.reports_to !== 'chairman' && !agents.some((p) => p.id === a.reports_to))
+                          .map((agent) => renderAgentNode(agent, agents, 0))}
                       </div>
-                    </article>
-                  ))}
+                    </div>
+                  )}
                 </div>
               </section>
             )}
