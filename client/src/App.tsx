@@ -156,7 +156,7 @@ function formatMessageTime(ts: string) {
 }
 
 export default function App() {
-  const [tab, setTab] = useState<'board' | 'inbox' | 'agents' | 'tasks'>('board')
+  const [tab, setTab] = useState<'tasks' | 'inbox' | 'agents'>('tasks')
   const [agents, setAgents] = useState<Agent[]>([])
   const [missions, setMissions] = useState<Mission[]>([])
   const [messages, setMessages] = useState<Message[]>([])
@@ -477,7 +477,7 @@ export default function App() {
           </div>
 
           <div className="mt-4 flex flex-wrap items-center gap-2">
-            {(['board', 'inbox', 'agents', 'tasks'] as const).map((t) => (
+            {(['tasks', 'inbox', 'agents'] as const).map((t) => (
               <button key={t} onClick={() => setTab(t)} className={`tab-chip ${tab === t ? 'active' : ''}`}>
                 {t}
                 {t === 'inbox' && pendingMessages.length > 0 ? ` (${pendingMessages.length})` : ''}
@@ -489,142 +489,6 @@ export default function App() {
 
         <div className="flex min-h-0 flex-1 flex-col xl:flex-row">
           <main className="min-h-0 flex-1 overflow-y-auto p-2 lg:p-3">
-            {tab === 'board' && (
-              <div className="flex min-h-full flex-col">
-                <section className="panel animate-rise flex min-h-0 flex-1 flex-col p-2 lg:p-3">
-                  <div className="kanban-scroll h-full min-h-0 flex-1">
-                    {STAGES.map((stage, stageIndex) => {
-                      const stageMissions = missionsByStage[stage] ?? []
-                      const stageTheme = STAGE_THEME[stage]
-
-                      return (
-                        <div
-                          key={stage}
-                          onDragOver={(e) => e.preventDefault()}
-                          onDrop={() => dropOnStage(stage)}
-                          className={`lane-card panel flex h-full min-h-0 flex-col p-3 ${stageTheme.lane} ${dragMission ? 'ring-1 ring-[#74b388]/70' : ''}`}
-                          style={{ animationDelay: `${stageIndex * 0.03}s` }}
-                        >
-                          <div className="mb-2 flex items-center justify-between">
-                            <span className={`rounded-full px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-[0.08em] ${stageTheme.badge}`}>
-                              {STAGE_LABELS[stage]}
-                            </span>
-                            <div className="flex items-center gap-1.5">
-                              {stage === 'backlog' && (
-                                <button
-                                  onClick={() => setShowQuickAdd((p) => !p)}
-                                  className="flex h-6 w-6 items-center justify-center rounded-full border border-[#caa882] bg-[#ffe4ca] text-sm font-bold text-[#8d5920] hover:bg-[#ffd7b3]"
-                                  title="Quick add mission"
-                                >
-                                  +
-                                </button>
-                              )}
-                              <span className="rounded-full bg-white/80 px-2 py-0.5 text-xs font-semibold text-[#55695f]">
-                                {stageMissions.length}
-                              </span>
-                            </div>
-                          </div>
-
-                          <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto pr-1">
-                            {stage === 'backlog' && showQuickAdd && (
-                              <div className="rounded-xl border border-[#efc8a6] bg-[#fff2e3] p-2">
-                                <div className="flex items-center gap-2">
-                                  <input
-                                    value={newTitle}
-                                    onChange={(e) => setNewTitle(e.target.value)}
-                                    onKeyDown={async (e) => {
-                                      if (e.key !== 'Enter') return
-                                      const ok = await createMission()
-                                      if (ok) setShowQuickAdd(false)
-                                    }}
-                                    placeholder="Quick add mission"
-                                    className="input-base h-9 min-w-0 flex-1 bg-white"
-                                  />
-                                  <button
-                                    onClick={async () => {
-                                      const ok = await createMission()
-                                      if (ok) setShowQuickAdd(false)
-                                    }}
-                                    disabled={!newTitle.trim()}
-                                    className="btn-base btn-primary h-9 px-3 py-0 text-xs"
-                                  >
-                                    Add
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-
-                            {stageMissions.length === 0 && (
-                              <div className={`rounded-xl border border-dashed p-3 text-xs ${stageTheme.empty}`}>
-                                Drop missions here
-                              </div>
-                            )}
-
-                            {stageMissions.map((m, missionIndex) => (
-                              <article
-                                key={m.id}
-                                draggable
-                                onDragStart={() => setDragMission(m.id)}
-                                onDragEnd={() => setDragMission(null)}
-                                className="mission-card animate-rise cursor-grab p-3 active:cursor-grabbing"
-                                style={{ animationDelay: `${missionIndex * 0.02}s` }}
-                              >
-                                <div className={`mb-2 h-1.5 rounded-full ${m.type === 'research' ? 'bg-[#77c4f7]' : 'bg-[#5fd68e]'}`} />
-
-                                <p className="text-sm font-bold leading-snug text-[#24342b]">{m.title}</p>
-
-                                <div className="mt-1 flex items-center justify-between gap-2">
-                                  <span className="font-mono text-[10.5px] text-[#6c8578]">{m.id}</span>
-                                  <span
-                                    className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                                      m.type === 'research' ? 'bg-[#def0fd] text-[#2c668d]' : 'bg-[#dcf7e4] text-[#26673b]'
-                                    }`}
-                                  >
-                                    {m.type}
-                                  </span>
-                                </div>
-
-                                {m.workspace && (
-                                  <p className="mt-1 truncate font-mono text-[11px] text-[#72897d]" title={m.workspace}>
-                                    {m.workspace}
-                                  </p>
-                                )}
-
-                                {m.assignee && <p className="mt-1 text-[11px] text-[#3f6f53]">Assignee: {m.assignee}</p>}
-
-                                {Object.keys(m.sessions ?? {}).length > 0 && (
-                                  <p className="mt-1 text-[11px] text-[#4f7b62]">
-                                    Resume ready ({Object.keys(m.sessions).length} session
-                                    {Object.keys(m.sessions).length > 1 ? 's' : ''})
-                                  </p>
-                                )}
-
-                                {stage !== 'done' && (
-                                  <button
-                                    onClick={() =>
-                                      setRunTarget({
-                                        missionId: m.id,
-                                        prompt: m.title,
-                                        workspace: m.workspace ?? '',
-                                        sessions: m.sessions ?? {},
-                                      })
-                                    }
-                                    className="btn-base btn-secondary mt-2 w-full py-1.5 text-xs"
-                                  >
-                                    Run now
-                                  </button>
-                                )}
-                              </article>
-                            ))}
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </section>
-              </div>
-            )}
-
             {tab === 'inbox' && (
               <section className="space-y-3 pt-1">
                 <div className="section-label">Organization Inbox</div>
