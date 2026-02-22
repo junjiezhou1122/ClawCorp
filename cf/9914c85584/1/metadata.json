@@ -1,0 +1,36 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "cf9914c85584",
+  "session_id": "6432b0a9-1408-4563-a05e-074257dcec3c",
+  "strategy": "manual-commit",
+  "created_at": "2026-02-22T11:36:42.123225Z",
+  "branch": "main",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "server/bun.lock",
+    "server/package.json",
+    "server/src/lib/SmartHire.ts",
+    "server/src/routes/hire.ts"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "422a07d379b1",
+  "checkpoint_transcript_start": 249,
+  "transcript_lines_at_start": 249,
+  "token_usage": {
+    "input_tokens": 10,
+    "cache_creation_tokens": 13796,
+    "cache_read_tokens": 828091,
+    "output_tokens": 2511,
+    "api_call_count": 8
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-02-22T11:36:41.738131Z",
+    "agent_lines": 0,
+    "human_added": 384,
+    "human_modified": 2,
+    "human_removed": 0,
+    "total_committed": 384,
+    "agent_percentage": 0
+  },
+  "transcript_path": ".claude/projects/-Users-junjie-research-ClawCorp/6432b0a9-1408-4563-a05e-074257dcec3c.jsonl"
+}

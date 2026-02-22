@@ -5,7 +5,9 @@
   "branch": "main",
   "checkpoints_count": 1,
   "files_touched": [
+    "server/bun.lock",
     "server/package.json",
+    "server/src/lib/SmartHire.ts",
     "server/src/routes/hire.ts"
   ],
   "sessions": [
@@ -15,13 +17,20 @@
       "context": "/cf/9914c85584/0/context.md",
       "content_hash": "/cf/9914c85584/0/content_hash.txt",
       "prompt": "/cf/9914c85584/0/prompt.txt"
+    },
+    {
+      "metadata": "/cf/9914c85584/1/metadata.json",
+      "transcript": "/cf/9914c85584/1/full.jsonl",
+      "context": "/cf/9914c85584/1/context.md",
+      "content_hash": "/cf/9914c85584/1/content_hash.txt",
+      "prompt": "/cf/9914c85584/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 421,
-    "cache_creation_tokens": 6077652,
-    "cache_read_tokens": 20210261,
-    "output_tokens": 102759,
-    "api_call_count": 260
+    "input_tokens": 431,
+    "cache_creation_tokens": 6091448,
+    "cache_read_tokens": 21038352,
+    "output_tokens": 105270,
+    "api_call_count": 268
   }
 }
