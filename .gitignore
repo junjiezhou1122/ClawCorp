@@ -46,5 +46,6 @@ next-env.d.ts
 
 # ClawCorp runtime state
 missions/
+tasks/
 archive/
 **/.claude/settings.json
