@@ -1,0 +1,86 @@
+Implement the following plan:
+
+# Plan: Implement Spec 002 — Task Board
+
+## Context
+
+The Chairman wants a simple task board (Backlog / Todo / In Progress / Review / Done) separate from the mission pipeline. Tasks are lightweight — just a title and status. The Review column has a "Push Back" action that returns tasks to In Progress with required written feedback. This is the Chairman's personal task management, independent of agents and missions.
+
+## Implementation (4 commits)
+
+### Commit 1: Server — Task CRUD route
+
+**File: `server/src/routes/tasks.ts`** (new)
+
+Follows the exact pattern of `missions.ts`:
+
+- `TASKS_DIR = join(import.meta.dir, '../../../tasks')`
+- `GET /` — list all tasks (readdir → read each state.json)
+- `POST /` — create task: `{ id: "T-{timestamp}", title, status: "backlog", created_at, feedback: [] }`
+- `PATCH /:id` — update status (drag-and-drop) or push back (append feedback)
+- `DELETE /:id` — delete task directory
+
+Broadcast events: `task:created`, `task:updated`, `task:deleted`
+
+**File: `server/src/index.ts`** — add `app.route('/api/tasks', taskRoutes)`
+
+### Commit 2: Client — Task tab + board with drag-and-drop
+
+**File: `client/src/App.tsx`**
+
+- Add `Task` type: `{ id, title, status, created_at, feedback: Array<{text, at}> }`
+- Add `'tasks'` to tab union type → `'board' | 'inbox' | 'agents' | 'tasks'`
+- Add `tasks` state, `dragTask` state
+- Fetch `/api/tasks` on mount
+- Define `TASK_COLUMNS = ['backlog', 'todo', 'in_progress', 'review', 'done']` with labels and theme colors
+- Render 5-column Kanban (reuse lane-card / mission-card patterns)
+- Quick-add input at top (title → Enter → POST → card in Backlog)
+- Drag-and-drop: copy `dropOnStage` pattern → `dropOnTaskColumn`
+- Delete button on each card (confirm → DELETE → remove from state)
+
+### Commit 3: Client — Push Back from Review with feedback
+
+**File: `client/src/App.tsx`**
+
+- "Push Back" button visible only on cards in `review` column
+- Opens modal (reuse Answer Escalation modal pattern): textarea for feedback, Cancel/Confirm
+- On confirm: `PATCH /api/tasks/:id` with `{ status: "in_progress", push_back: feedbackText }`
+- Server appends `{ text, at }` to `feedback[]` array
+- Feedback history displayed on card when `feedback.length > 0` — latest feedback shown directly, older entries collapsed
+
+### Commit 4: Client — WebSocket real-time sync
+
+**File: `client/src/App.tsx`**
+
+- Handle `task:created` → append to tasks state
+- Handle `task:updated` → update in tasks state
+- Handle `task:deleted` → remove from tasks state
+- Header badge: show task count in "tasks" tab pill
+
+## Files to modify
+
+| File | Action |
+|---|---|
+| `server/src/routes/tasks.ts` | **Create** — CRUD route |
+| `server/src/index.ts` | **Edit** — register route |
+| `client/src/App.tsx` | **Edit** — add Tasks tab, board, DnD, push back, WS |
+| `.gitignore` | **Edit** — add `tasks/` to runtime state |
+
+## Verification
+
+1. Start server (`cd server && bun run dev`) + client (`cd client && bun run dev`)
+2. Click "Tasks" tab → see 5 empty columns
+3. Type a title, press Enter → card appears in Backlog
+4. Drag card to "In Progress" → card moves, persists on refresh
+5. Drag card to "Review" → "Push Back" button appears on card
+6. Click "Push Back", type feedback, confirm → card returns to In Progress with feedback shown
+7. Drag to "Review" again, push back again → feedback history grows
+8. Drag to "Done" → card stays in Done
+9. Click delete → card removed
+
+
+If you need specific details from before exiting plan mode (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/junjie/.REDACTED.jsonl
+
+---
+
+你实现我们的所有spec了吗
