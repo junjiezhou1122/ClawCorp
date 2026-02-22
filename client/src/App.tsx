@@ -9,6 +9,16 @@ type Agent = {
   status: 'idle' | 'running' | 'error'
   reports_to?: string
   subordinates?: string[]
+  rank?: string
+  team?: string
+}
+
+type Team = {
+  id: string
+  name: string
+  executive_sponsor: string
+  head: string
+  members: string[]
 }
 
 type Mission = {
@@ -147,6 +157,15 @@ const DEPT_THEME: Record<string, string> = {
   'Research Lab': 'bg-[#cfeafd] text-[#285f84]',
 }
 
+const RANK_THEME: Record<string, string> = {
+  executive: 'bg-[#f0e4be] text-[#8a7328]',
+  director: 'bg-[#e0d0f0] text-[#5a3d7a]',
+  lead: 'bg-[#d2e8f0] text-[#2d6080]',
+  senior: 'bg-[#d2f0d8] text-[#25683a]',
+  member: 'bg-[#e7f2ea] text-[#446658]',
+  intern: 'bg-[#f0e8d8] text-[#7a6040]',
+}
+
 let logId = 0
 
 function formatMessageTime(ts: string) {
@@ -162,7 +181,8 @@ export default function App() {
   const [messages, setMessages] = useState<Message[]>([])
   const [logs, setLogs] = useState<LogLine[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
-
+  const [teams, setTeams] = useState<Team[]>([])
+  const [expandedDept, setExpandedDept] = useState<string | null>(null)
   const [newTitle, setNewTitle] = useState('')
   const [showQuickAdd, setShowQuickAdd] = useState(false)
   const [newTaskTitle, setNewTaskTitle] = useState('')
@@ -207,6 +227,7 @@ export default function App() {
     fetch('/api/missions').then((r) => r.json()).then(setMissions).catch(console.error)
     fetch('/api/messages').then((r) => r.json()).then(setMessages).catch(console.error)
     fetch('/api/tasks').then((r) => r.json()).then(setTasks).catch(console.error)
+    fetch('/api/teams').then((r) => r.json()).then(setTeams).catch(console.error)
   }, [])
 
   useEffect(() => {
@@ -311,6 +332,19 @@ export default function App() {
     if (event === 'hire:error') {
       setHiringInProgress(false)
       appendLog('hire', '', `[hire] Failed: ${d.message}`, 'error')
+    }
+
+    // Team events
+    if (event === 'team:created') {
+      const team = data as unknown as Team
+      setTeams((p) => [...p, team])
+    }
+    if (event === 'team:updated') {
+      const updated = data as unknown as Team
+      setTeams((p) => p.map((t) => (t.id === updated.id ? updated : t)))
+    }
+    if (event === 'team:deleted') {
+      setTeams((p) => p.filter((t) => t.id !== d.id))
     }
   })
 
@@ -480,9 +514,11 @@ export default function App() {
             <div className="flex items-center gap-2">
               <span className={`h-2.5 w-2.5 rounded-full ${agent.status === 'running' ? 'bg-[#35bf68] animate-dot' : 'bg-[#abc8b4]'}`} />
               <span className="text-sm font-bold text-[#26372d]">{agent.title}</span>
-              <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${DEPT_THEME[agent.department] ?? 'bg-[#e7f2ea] text-[#446658]'}`}>
-                {agent.department}
-              </span>
+              {agent.rank && (
+                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${RANK_THEME[agent.rank] ?? 'bg-[#e7f2ea] text-[#446658]'}`}>
+                  {agent.rank}
+                </span>
+              )}
             </div>
             <button onClick={() => fireAgent(agent.id)} className="text-[11px] font-semibold text-[#9d5d52] hover:text-[#b44136]">
               fire
@@ -503,6 +539,64 @@ export default function App() {
         {children.length > 0 && (
           <div className="ml-4 border-l-2 border-[#d8e6dc]">
             {children.map((child) => renderAgentNode(child, allAgents, depth + 1))}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  function renderDeptTeamTree(team: Team) {
+    // Get all agents in this team
+    const headAgent = agents.find((a) => a.id === team.head)
+    const memberAgents = agents.filter((a) => team.members.includes(a.id))
+    const allTeamAgents = headAgent ? [headAgent, ...memberAgents] : memberAgents
+    const hasRunning = allTeamAgents.some((a) => a.status === 'running')
+    const total = allTeamAgents.length
+
+    return (
+      <div key={team.id} className="relative pl-6 pt-3">
+        <div className="absolute left-0 top-6 h-px w-6 bg-[#d8e6dc]" />
+
+        {/* Department node — clickable to expand */}
+        <button
+          onClick={() => setExpandedDept(expandedDept === team.id ? null : team.id)}
+          className={`w-full rounded-xl border p-3 text-left transition-colors ${
+            expandedDept === team.id
+              ? 'border-[#a8c8f0] bg-[#f0f6ff]'
+              : 'border-[#d8e6dc] bg-white hover:bg-[#f8fdf9]'
+          }`}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              {hasRunning && (
+                <span className="h-2.5 w-2.5 rounded-full bg-[#35bf68] animate-dot" />
+              )}
+              <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${DEPT_THEME[team.name] ?? 'bg-[#e7f2ea] text-[#446658]'}`}>
+                {team.name}
+              </span>
+              <span className="rounded-full bg-white/80 px-2 py-0.5 text-[11px] font-semibold text-[#55695f]">
+                {total}
+              </span>
+            </div>
+            <span className="text-xs text-[#8a9e91]">
+              {expandedDept === team.id ? '▼' : '▶'}
+            </span>
+          </div>
+          {headAgent && (
+            <p className="mt-1 text-xs text-[#647d71]">
+              Head: {headAgent.title}
+            </p>
+          )}
+        </button>
+
+        {/* Expanded internal tree */}
+        {expandedDept === team.id && (
+          <div className="ml-4 border-l-2 border-[#c7d8f0]">
+            {headAgent && renderAgentNode(headAgent, allTeamAgents, 0)}
+            {/* Members without a reports_to chain within the team (orphans within dept) */}
+            {memberAgents
+              .filter((a) => a.reports_to !== team.head && !allTeamAgents.some((t) => t.id === a.reports_to))
+              .map((agent) => renderAgentNode(agent, allTeamAgents, 0))}
           </div>
         )}
       </div>
@@ -638,26 +732,77 @@ export default function App() {
                     <span className="rounded-full bg-[#f0e4be] px-2 py-0.5 text-[11px] font-semibold text-[#8a7328]">You</span>
                   </div>
 
-                  {/* Direct reports to chairman */}
+                  {/* C-suite executives (agents that report to chairman) */}
                   <div className="ml-6 border-l-2 border-[#d8e6dc]">
                     {agents
                       .filter((a) => a.reports_to === 'chairman')
-                      .map((agent) => renderAgentNode(agent, agents, 0))}
+                      .map((exec) => {
+                        // Find departments this executive sponsors
+                        const sponsoredTeams = teams.filter((t) => t.executive_sponsor === exec.id)
+
+                        return (
+                          <div key={exec.id} className="relative pl-6 pt-3">
+                            <div className="absolute left-0 top-6 h-px w-6 bg-[#d8e6dc]" />
+
+                            {/* Executive node */}
+                            <div className={`rounded-xl border p-3 ${exec.status === 'running' ? 'border-[#7fd4a0] bg-[#f0fdf4]' : 'border-[#d4c9a8] bg-[#fefcf5]'}`}>
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  <span className={`h-2.5 w-2.5 rounded-full ${exec.status === 'running' ? 'bg-[#35bf68] animate-dot' : 'bg-[#d4aa4f]'}`} />
+                                  <span className="text-sm font-bold text-[#26372d]">{exec.title}</span>
+                                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${RANK_THEME.executive}`}>
+                                    executive
+                                  </span>
+                                </div>
+                                <button onClick={() => fireAgent(exec.id)} className="text-[11px] font-semibold text-[#9d5d52] hover:text-[#b44136]">
+                                  fire
+                                </button>
+                              </div>
+                              <p className="mt-1 font-mono text-[10.5px] text-[#6f887b]">{exec.id}</p>
+                              <p className="mt-0.5 text-xs leading-relaxed text-[#647d71]">{exec.description}</p>
+                              {exec.status === 'running' && (
+                                <button
+                                  onClick={() => fetch(`/api/run/${exec.id}`, { method: 'DELETE' })}
+                                  className="btn-base btn-danger mt-2 py-1 text-xs"
+                                >
+                                  Kill session
+                                </button>
+                              )}
+                            </div>
+
+                            {/* Departments under this executive */}
+                            {sponsoredTeams.length > 0 && (
+                              <div className="ml-4 border-l-2 border-[#d8e6dc]">
+                                {sponsoredTeams.map((team) => renderDeptTeamTree(team))}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
                   </div>
 
-                  {/* Orphans (no reports_to or reports_to not found) */}
-                  {agents
-                    .filter((a) => a.reports_to && a.reports_to !== 'chairman' && !agents.some((p) => p.id === a.reports_to))
-                    .length > 0 && (
-                    <div className="mt-4">
-                      <div className="section-label text-[11px]">Unlinked</div>
-                      <div className="ml-6 border-l-2 border-dashed border-[#e0d8c8]">
-                        {agents
-                          .filter((a) => a.reports_to && a.reports_to !== 'chairman' && !agents.some((p) => p.id === a.reports_to))
-                          .map((agent) => renderAgentNode(agent, agents, 0))}
+                  {/* Unassigned agents (no team, not an executive) */}
+                  {(() => {
+                    const teamAgentIds = new Set<string>()
+                    for (const t of teams) {
+                      if (t.head) teamAgentIds.add(t.head)
+                      for (const m of t.members) teamAgentIds.add(m)
+                    }
+                    const execs = agents.filter((a) => a.reports_to === 'chairman')
+                    const execIds = new Set(execs.map((e) => e.id))
+                    const unassigned = agents.filter((a) => !teamAgentIds.has(a.id) && !execIds.has(a.id))
+
+                    if (unassigned.length === 0) return null
+
+                    return (
+                      <div className="mt-4">
+                        <div className="section-label text-[11px]">Unassigned</div>
+                        <div className="ml-6 border-l-2 border-dashed border-[#e0d8c8]">
+                          {unassigned.map((agent) => renderAgentNode(agent, unassigned, 0))}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )
+                  })()}
                 </div>
               </section>
             )}
