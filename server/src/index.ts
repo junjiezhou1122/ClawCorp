@@ -9,6 +9,7 @@ import { messageRoutes } from './routes/messages'
 import { delegateRoutes } from './routes/delegate'
 import { hireRoutes } from './routes/hire'
 import { taskRoutes } from './routes/tasks'
+import { teamRoutes } from './routes/teams'
 
 const app = new Hono()
 
@@ -22,6 +23,7 @@ app.route('/api/messages', messageRoutes)
 app.route('/api/delegate', delegateRoutes)
 app.route('/api/hire', hireRoutes)
 app.route('/api/tasks', taskRoutes)
+app.route('/api/teams', teamRoutes)
 
 app.get('/health', (c) => c.json({ status: 'ok', time: new Date().toISOString() }))
 

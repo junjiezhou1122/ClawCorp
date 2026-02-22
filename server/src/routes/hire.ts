@@ -12,7 +12,7 @@ const ARCHIVE_DIR = join(import.meta.dir, '../../../archive')
 // POST /api/hire — create new agent
 hireRoutes.post('/', async (c) => {
   const body = await c.req.json()
-  const { id, title, department, description, reports_to, system_prompt, cost_model } = body
+  const { id, title, department, description, reports_to, system_prompt, cost_model, rank, team } = body
 
   if (!id || !title) return c.json({ error: 'id and title required' }, 400)
 
@@ -34,6 +34,8 @@ hireRoutes.post('/', async (c) => {
     },
     reports_to: reports_to ?? 'chairman',
     subordinates: [],
+    rank: rank ?? 'member',
+    team: team ?? '',
     cost_model: cost_model ?? 'medium',
   }
 

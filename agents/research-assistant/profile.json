@@ -11,5 +11,7 @@
   },
   "reports_to": "principal-investigator",
   "subordinates": [],
+  "rank": "member",
+  "team": "research-lab",
   "cost_model": "medium"
 }

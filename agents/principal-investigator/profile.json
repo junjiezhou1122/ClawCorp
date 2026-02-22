@@ -11,6 +11,8 @@
   },
   "reports_to": "chairman",
   "subordinates": ["research-assistant"],
+  "rank": "executive",
+  "team": "research-lab",
   "default_workspace": "~/research",
   "cost_model": "high"
 }

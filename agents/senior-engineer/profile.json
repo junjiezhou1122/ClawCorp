@@ -11,6 +11,8 @@
   },
   "reports_to": "architect",
   "subordinates": ["qa-engineer", "intern"],
+  "rank": "senior",
+  "team": "engineering",
   "default_workspace": "~/",
   "cost_model": "high"
 }

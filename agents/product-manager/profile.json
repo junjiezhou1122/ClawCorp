@@ -11,5 +11,7 @@
   },
   "reports_to": "chairman",
   "subordinates": ["architect", "senior-engineer"],
+  "rank": "executive",
+  "team": "product",
   "cost_model": "medium"
 }

@@ -11,5 +11,7 @@
   },
   "reports_to": "product-manager",
   "subordinates": ["senior-engineer"],
+  "rank": "director",
+  "team": "engineering",
   "cost_model": "high"
 }

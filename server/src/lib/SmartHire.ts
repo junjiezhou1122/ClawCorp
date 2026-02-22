@@ -7,6 +7,15 @@ import { broadcast } from './hub'
 const AGENTS_DIR = join(import.meta.dir, '../../../agents')
 const ARCHIVE_DIR = join(import.meta.dir, '../../../archive')
 
+function inferTeamId(department: string): string {
+  const map: Record<string, string> = {
+    'Engineering': 'engineering',
+    'Research Lab': 'research-lab',
+    'Product': 'product',
+  }
+  return map[department] ?? 'engineering'
+}
+
 const TEST_TASKS: Record<string, string> = {
   Engineering:
     'Write a TypeScript function isPalindrome(s: string): boolean with 3 test cases',
@@ -23,6 +32,8 @@ type Candidate = {
   description: string
   reports_to: string
   system_prompt: string
+  rank?: string
+  team?: string
 }
 
 type InterviewResult = {
@@ -124,7 +135,9 @@ Generate 3 distinct agent profiles in JSON array format. Each should have:
 - title: a human-readable job title
 - department: one of "Engineering", "Research Lab", or "Product"
 - description: one sentence describing this agent's specialty
-- reports_to: infer from department — "principal-investigator" for Research Lab, "chairman" for others
+- reports_to: infer from department — "principal-investigator" for Research Lab, "architect" for Engineering, "product-manager" for Product
+- rank: one of "senior", "member", or "intern" based on the complexity/seniority implied
+- team: the team id — "engineering", "research-lab", or "product"
 - system_prompt: specific, actionable instructions including the 3 mandatory rules:
   1. Never ask clarifying questions — make assumptions and proceed
   2. Use escalate tool if blocked
@@ -275,6 +288,8 @@ async function hireWinner(candidate: Candidate) {
     },
     reports_to: candidate.reports_to,
     subordinates: [],
+    rank: candidate.rank ?? 'member',
+    team: candidate.team ?? inferTeamId(candidate.department),
     cost_model: 'medium',
   }
 
