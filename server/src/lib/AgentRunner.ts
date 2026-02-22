@@ -56,10 +56,13 @@ export async function runAgent(
   const driver = profile.driver
   const systemPrompt = driver.system_prompt ?? ''
 
-  // Build full prompt = system prompt + task
+  // Build full prompt = system prompt + task + artifacts dir
+  const artifactsDir = join(MISSIONS_DIR, missionId, 'artifacts')
+  await mkdir(artifactsDir, { recursive: true })
+
   const fullPrompt = systemPrompt
-    ? `${systemPrompt}\n\n---\nMission ID: ${missionId}\nTask: ${prompt}`
-    : prompt
+    ? `${systemPrompt}\n\n---\nMission ID: ${missionId}\nArtifacts directory: ${artifactsDir}\nSave ALL output files to the artifacts directory above.\nTask: ${prompt}`
+    : `Mission ID: ${missionId}\nArtifacts directory: ${artifactsDir}\nSave ALL output files to the artifacts directory above.\nTask: ${prompt}`
 
   broadcast('agent:start', { agentId, missionId, workspace: cwd })
 
