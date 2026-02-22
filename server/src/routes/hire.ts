@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { readFile, writeFile, mkdir, rename } from 'fs/promises'
 import { join } from 'path'
 import { existsSync } from 'fs'
+import { runSmartHire } from '../lib/SmartHire'
 
 export const hireRoutes = new Hono()
 
@@ -40,6 +41,20 @@ hireRoutes.post('/', async (c) => {
   await writeFile(join(agentDir, 'memory.md'), `# ${title} Memory\n\n`)
 
   return c.json(profile, 201)
+})
+
+// POST /api/hire/smart — smart hire via natural language
+hireRoutes.post('/smart', async (c) => {
+  const body = await c.req.json()
+  const { description } = body
+
+  if (!description?.trim()) return c.json({ error: 'description required' }, 400)
+
+  const hireId = `${Date.now()}`
+  // Fire and forget — progress streams via WebSocket
+  runSmartHire(description.trim(), hireId)
+
+  return c.json({ ok: true, hireId })
 })
 
 // DELETE /api/hire/:id — fire (archive) agent
