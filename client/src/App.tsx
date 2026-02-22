@@ -176,15 +176,9 @@ export default function App() {
   const [selectedAgent, setSelectedAgent] = useState('')
   const [resumeSession, setResumeSession] = useState(false)
 
-  const [showHire, setShowHire] = useState(false)
-  const [hireForm, setHireForm] = useState({
-    id: '',
-    title: '',
-    department: 'Engineering',
-    description: '',
-    reports_to: 'chairman',
-    system_prompt: '',
-  })
+  const [showSmartHire, setShowSmartHire] = useState(false)
+  const [smartHireDesc, setSmartHireDesc] = useState('')
+  const [hiringInProgress, setHiringInProgress] = useState(false)
 
   const [answerTarget, setAnswerTarget] = useState<Message | null>(null)
   const [answerText, setAnswerText] = useState('')
@@ -287,6 +281,37 @@ export default function App() {
       const deleted = data as unknown as { id: string }
       setTasks((p) => p.filter((t) => t.id !== deleted.id))
     }
+
+    // Smart Hire events
+    if (event === 'hire:start') {
+      setHiringInProgress(true)
+      appendLog('hire', '', `[hire] Generating 3 candidates for: "${d.description}"`, 'system')
+    }
+    if (event === 'hire:candidates') {
+      const cands = (data as { candidates: Array<{ id: string; title: string }> }).candidates
+      appendLog('hire', '', `[hire] Generated: ${cands.map((c) => c.id).join(', ')}`, 'system')
+    }
+    if (event === 'hire:interview_start') {
+      appendLog('hire', '', `[hire] Interviewing ${d.candidateId}...`, 'system')
+    }
+    if (event === 'hire:interview_done') {
+      appendLog('hire', '', `[hire] ${d.candidateId} finished (exit ${d.exitCode})`, 'system')
+    }
+    if (event === 'hire:scores') {
+      const scores = (data as { scores: Array<{ candidateId: string; weighted: number }> }).scores
+      const summary = scores.map((s) => `${s.candidateId}: ${s.weighted}`).join(' / ')
+      appendLog('hire', '', `[hire] Scores: ${summary}`, 'system')
+    }
+    if (event === 'hire:complete') {
+      setHiringInProgress(false)
+      const agent = (data as { agent: Agent }).agent
+      appendLog('hire', '', `[hire] Hired: ${agent.title} (${agent.id})`, 'system')
+      setAgents((p) => [...p, { ...agent, status: 'idle' as const }])
+    }
+    if (event === 'hire:error') {
+      setHiringInProgress(false)
+      appendLog('hire', '', `[hire] Failed: ${d.message}`, 'error')
+    }
   })
 
   async function createMission() {
@@ -331,25 +356,15 @@ export default function App() {
     setResumeSession(false)
   }
 
-  async function hireAgent() {
-    if (!hireForm.id || !hireForm.title) return
-    const res = await fetch('/api/hire', {
+  async function startSmartHire() {
+    if (!smartHireDesc.trim()) return
+    await fetch('/api/hire/smart', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(hireForm),
+      body: JSON.stringify({ description: smartHireDesc }),
     })
-
-    const agent = await res.json()
-    setAgents((p) => [...p, { ...agent, status: 'idle' }])
-    setShowHire(false)
-    setHireForm({
-      id: '',
-      title: '',
-      department: 'Engineering',
-      description: '',
-      reports_to: 'chairman',
-      system_prompt: '',
-    })
+    setShowSmartHire(false)
+    setSmartHireDesc('')
   }
 
   async function fireAgent(id: string) {
@@ -525,6 +540,13 @@ export default function App() {
                 {t === 'tasks' && tasks.length > 0 ? ` (${tasks.length})` : ''}
               </button>
             ))}
+
+            {hiringInProgress && (
+              <span className="ml-auto flex items-center gap-1.5 rounded-full bg-[#fff6e9] px-3 py-1 text-xs font-semibold text-[#8d5b1d]">
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#d4aa4f] animate-dot" />
+                Interviewing candidates...
+              </span>
+            )}
           </div>
         </header>
 
@@ -602,8 +624,8 @@ export default function App() {
               <section className="space-y-3 pt-1">
                 <div className="flex items-center justify-between">
                   <div className="section-label">Organization ({agents.length})</div>
-                  <button onClick={() => setShowHire(true)} className="btn-base btn-primary py-1.5 text-xs">
-                    + Hire Agent
+                  <button onClick={() => setShowSmartHire(true)} className="btn-base btn-primary py-1.5 text-xs">
+                    Smart Hire
                   </button>
                 </div>
 
@@ -862,60 +884,40 @@ export default function App() {
         </div>
       )}
 
-      {showHire && (
+      {showSmartHire && (
         <div className="modal-mask fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="panel modal-card w-full max-w-xl p-5 lg:p-6">
-            <h3 className="font-display text-xl text-[#224232]">Hire New Agent</h3>
+            <h3 className="font-display text-xl text-[#224232]">Smart Hire</h3>
+            <p className="mt-1 text-sm text-[#6f877b]">
+              Describe the agent you need. The system will generate 3 candidates,
+              interview them, and hire the best one.
+            </p>
 
-            <div className="mt-4 space-y-3">
-              {[
-                { key: 'id', label: 'ID (slug)', placeholder: 'data-scientist' },
-                { key: 'title', label: 'Title', placeholder: 'Data Scientist' },
-                { key: 'description', label: 'Description', placeholder: 'Analyzes data and provides insights' },
-                { key: 'reports_to', label: 'Reports To', placeholder: 'chairman' },
-              ].map(({ key, label, placeholder }) => (
-                <label key={key} className="block text-xs font-semibold text-[#668074]">
-                  {label}
-                  <input
-                    value={hireForm[key as keyof typeof hireForm]}
-                    onChange={(e) => setHireForm((p) => ({ ...p, [key]: e.target.value }))}
-                    placeholder={placeholder}
-                    className="input-base mt-1"
-                  />
-                </label>
-              ))}
-
-              <label className="block text-xs font-semibold text-[#668074]">
-                Department
-                <select
-                  value={hireForm.department}
-                  onChange={(e) => setHireForm((p) => ({ ...p, department: e.target.value }))}
-                  className="select-base mt-1"
-                >
-                  <option>Engineering</option>
-                  <option>Product</option>
-                  <option>Research Lab</option>
-                </select>
-              </label>
-
-              <label className="block text-xs font-semibold text-[#668074]">
-                System Prompt (optional)
-                <textarea
-                  value={hireForm.system_prompt}
-                  onChange={(e) => setHireForm((p) => ({ ...p, system_prompt: e.target.value }))}
-                  rows={3}
-                  placeholder="You are a Data Scientist. Never ask questions..."
-                  className="textarea-base mt-1 resize-none"
-                />
-              </label>
-            </div>
+            <textarea
+              value={smartHireDesc}
+              onChange={(e) => setSmartHireDesc(e.target.value)}
+              rows={4}
+              placeholder="I need a database expert who can optimize SQL queries and design efficient schemas..."
+              className="textarea-base mt-4 resize-none"
+              autoFocus
+            />
 
             <div className="mt-4 flex justify-end gap-2">
-              <button onClick={() => setShowHire(false)} className="btn-base btn-secondary">
+              <button
+                onClick={() => {
+                  setShowSmartHire(false)
+                  setSmartHireDesc('')
+                }}
+                className="btn-base btn-secondary"
+              >
                 Cancel
               </button>
-              <button onClick={hireAgent} disabled={!hireForm.id || !hireForm.title} className="btn-base btn-primary">
-                Hire Agent
+              <button
+                onClick={startSmartHire}
+                disabled={!smartHireDesc.trim()}
+                className="btn-base btn-primary"
+              >
+                Start Interview
               </button>
             </div>
           </div>
