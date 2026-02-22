@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { runAgent, killAgent, isRunning } from '../lib/AgentRunner'
+import { runAgent, killAgent, isRunning, getRunningAgents } from '../lib/AgentRunner'
 import { readFile, writeFile, mkdir } from 'fs/promises'
 import { join } from 'path'
 import { existsSync } from 'fs'
@@ -7,6 +7,10 @@ import { existsSync } from 'fs'
 export const runRoutes = new Hono()
 
 const MISSIONS_DIR = join(import.meta.dir, '../../../missions')
+
+runRoutes.get('/', (c) => {
+  return c.json(getRunningAgents())
+})
 
 runRoutes.post('/', async (c) => {
   const body = await c.req.json()

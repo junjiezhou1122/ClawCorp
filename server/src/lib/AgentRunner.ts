@@ -13,6 +13,10 @@ export function isRunning(agentId: string) {
   return running.has(agentId)
 }
 
+export function getRunningAgents(): string[] {
+  return Array.from(running.keys())
+}
+
 export interface RunOptions {
   workspace?: string
   sessionId?: string

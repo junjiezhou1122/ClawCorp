@@ -117,8 +117,7 @@ export default function App() {
   const [logs, setLogs] = useState<LogLine[]>([])
 
   const [newTitle, setNewTitle] = useState('')
-  const [newType, setNewType] = useState<'engineering' | 'research'>('engineering')
-  const [newWorkspace, setNewWorkspace] = useState('')
+  const [showQuickAdd, setShowQuickAdd] = useState(false)
 
   const [runTarget, setRunTarget] = useState<{
     missionId: string
@@ -150,6 +149,14 @@ export default function App() {
     fetch('/api/agents')
       .then((r) => r.json())
       .then((d) => setAgents(d.map((a: Agent) => ({ ...a, status: 'idle' }))))
+      .then(() =>
+        fetch('/api/run')
+          .then((r) => r.json())
+          .then((running: string[]) => {
+            if (running.length > 0)
+              setAgents((p) => p.map((a) => (running.includes(a.id) ? { ...a, status: 'running' } : a)))
+          })
+      )
       .catch(console.error)
 
     fetch('/api/missions').then((r) => r.json()).then(setMissions).catch(console.error)
@@ -216,17 +223,17 @@ export default function App() {
   })
 
   async function createMission() {
-    if (!newTitle.trim()) return
+    if (!newTitle.trim()) return false
     const res = await fetch('/api/missions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: newTitle, type: newType, workspace: newWorkspace || null }),
+      body: JSON.stringify({ title: newTitle, type: 'engineering', workspace: null }),
     })
 
     const mission = await res.json()
     setMissions((p) => [...p, mission])
     setNewTitle('')
-    setNewWorkspace('')
+    return true
   }
 
   async function startRun() {
@@ -327,25 +334,14 @@ export default function App() {
   const pendingMessages = messages.filter((m) => m.status === 'pending')
   const runningAgents = agents.filter((a) => a.status === 'running')
 
-  const doneCount = missionsByStage.done?.length ?? 0
-  const completion = missions.length > 0 ? Math.round((doneCount / missions.length) * 100) : 0
-
   return (
     <div className="app-shell">
-      <div className="ambient" aria-hidden>
-        <span className="orb orb-a" />
-        <span className="orb orb-b" />
-        <span className="orb orb-c" />
-      </div>
-
       <div className="shell-card">
-        <header className="border-b border-[var(--line-soft)] px-4 pb-4 pt-5 lg:px-6">
+        <header className="border-b border-[var(--line-soft)] px-4 pb-3 pt-4 lg:px-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="max-w-xl">
               <h1 className="font-display text-[1.9rem] leading-[1] text-[#1e3127]">ClawCorp Control</h1>
-              <p className="mt-2 text-sm text-[var(--text-muted)]">
-                Bright operations cockpit for multi-agent execution. Drag missions through the pipeline and keep decisions tight.
-              </p>
+              <p className="mt-1 text-sm text-[var(--text-muted)]">Operate missions across the task board with minimum friction.</p>
             </div>
 
             <div className="flex flex-wrap gap-2 lg:justify-end">
@@ -372,66 +368,11 @@ export default function App() {
         </header>
 
         <div className="flex min-h-0 flex-1 flex-col xl:flex-row">
-          <main className="min-h-0 flex-1 overflow-y-auto p-4 lg:p-6">
+          <main className="min-h-0 flex-1 overflow-y-auto p-2 lg:p-3">
             {tab === 'board' && (
-              <div className="flex min-h-full flex-col gap-4">
-                <section className="panel animate-rise p-4 lg:p-5">
-                  <div className="section-label mb-3">Create Mission</div>
-                  <div className="grid gap-2 lg:grid-cols-[1.2fr_1fr_auto_auto]">
-                    <input
-                      value={newTitle}
-                      onChange={(e) => setNewTitle(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && createMission()}
-                      placeholder="Define a mission title"
-                      className="input-base"
-                    />
-
-                    <input
-                      value={newWorkspace}
-                      onChange={(e) => setNewWorkspace(e.target.value)}
-                      placeholder="Workspace path (optional)"
-                      className="input-base font-mono text-sm"
-                    />
-
-                    <select
-                      value={newType}
-                      onChange={(e) => setNewType(e.target.value as 'engineering' | 'research')}
-                      className="select-base"
-                    >
-                      <option value="engineering">Engineering</option>
-                      <option value="research">Research</option>
-                    </select>
-
-                    <button onClick={createMission} className="btn-base btn-primary whitespace-nowrap">
-                      + Add Mission
-                    </button>
-                  </div>
-                </section>
-
-                <section className="panel animate-rise flex min-h-[500px] flex-1 flex-col space-y-4 p-4 lg:p-5">
-                  <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-                    <div>
-                      <div className="section-label">Pipeline</div>
-                      <p className="mt-1 text-sm text-[var(--text-muted)]">
-                        Wide board layout for backlog to done. Drag and drop cards to update mission stage.
-                      </p>
-                    </div>
-
-                    <div className="min-w-[240px]">
-                      <div className="mb-1 flex items-center justify-between text-xs font-semibold text-[#4f6659]">
-                        <span>Completion</span>
-                        <span>{completion}%</span>
-                      </div>
-                      <div className="h-2 rounded-full bg-[#e4f0e6]">
-                        <div
-                          className="h-2 rounded-full bg-gradient-to-r from-[#51d27d] via-[#36c2ab] to-[#59b8ff] transition-all"
-                          style={{ width: `${completion}%` }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="kanban-scroll min-h-0 flex-1">
+              <div className="flex min-h-full flex-col">
+                <section className="panel animate-rise flex min-h-0 flex-1 flex-col p-2 lg:p-3">
+                  <div className="kanban-scroll h-full min-h-0 flex-1">
                     {STAGES.map((stage, stageIndex) => {
                       const stageMissions = missionsByStage[stage] ?? []
                       const stageTheme = STAGE_THEME[stage]
@@ -448,12 +389,51 @@ export default function App() {
                             <span className={`rounded-full px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-[0.08em] ${stageTheme.badge}`}>
                               {STAGE_LABELS[stage]}
                             </span>
-                            <span className="rounded-full bg-white/80 px-2 py-0.5 text-xs font-semibold text-[#55695f]">
-                              {stageMissions.length}
-                            </span>
+                            <div className="flex items-center gap-1.5">
+                              {stage === 'backlog' && (
+                                <button
+                                  onClick={() => setShowQuickAdd((p) => !p)}
+                                  className="flex h-6 w-6 items-center justify-center rounded-full border border-[#caa882] bg-[#ffe4ca] text-sm font-bold text-[#8d5920] hover:bg-[#ffd7b3]"
+                                  title="Quick add mission"
+                                >
+                                  +
+                                </button>
+                              )}
+                              <span className="rounded-full bg-white/80 px-2 py-0.5 text-xs font-semibold text-[#55695f]">
+                                {stageMissions.length}
+                              </span>
+                            </div>
                           </div>
 
                           <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto pr-1">
+                            {stage === 'backlog' && showQuickAdd && (
+                              <div className="rounded-xl border border-[#efc8a6] bg-[#fff2e3] p-2">
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    value={newTitle}
+                                    onChange={(e) => setNewTitle(e.target.value)}
+                                    onKeyDown={async (e) => {
+                                      if (e.key !== 'Enter') return
+                                      const ok = await createMission()
+                                      if (ok) setShowQuickAdd(false)
+                                    }}
+                                    placeholder="Quick add mission"
+                                    className="input-base h-9 min-w-0 flex-1 bg-white"
+                                  />
+                                  <button
+                                    onClick={async () => {
+                                      const ok = await createMission()
+                                      if (ok) setShowQuickAdd(false)
+                                    }}
+                                    disabled={!newTitle.trim()}
+                                    className="btn-base btn-primary h-9 px-3 py-0 text-xs"
+                                  >
+                                    Add
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
                             {stageMissions.length === 0 && (
                               <div className={`rounded-xl border border-dashed p-3 text-xs ${stageTheme.empty}`}>
                                 Drop missions here
@@ -650,7 +630,7 @@ export default function App() {
             )}
           </main>
 
-          <aside className="flex min-h-[240px] flex-col border-t border-[var(--line-soft)] bg-white/60 xl:w-[360px] xl:shrink-0 xl:border-l xl:border-t-0">
+          <aside className="flex min-h-[220px] flex-col border-t border-[var(--line-soft)] bg-white/60 xl:w-[260px] xl:shrink-0 xl:border-l xl:border-t-0">
             <div className="flex items-center justify-between border-b border-[var(--line-soft)] px-4 py-3">
               <div className="section-label">Live Log</div>
               <button onClick={() => setLogs([])} className="text-xs font-bold text-[#688173] hover:text-[#365945]">
