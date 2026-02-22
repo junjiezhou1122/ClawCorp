@@ -9,138 +9,151 @@
 
 ## Context
 
-ClawCorp currently stores a flat list of agents with `reports_to` and `subordinates` fields, but there is no formal concept of a **team**. The Agents tab shows agents as a grid of cards with no visual hierarchy. Cross-agent delegation is individual-to-individual with no team boundary.
+ClawCorp currently stores a flat list of agents with `reports_to` and `subordinates` fields. The Agents tab shows an org-chart tree rooted at Chairman, but the tree is flat — every agent is a direct report or one level deep. There is no formal concept of **executive roles**, **departments as groups**, or **rank levels** within a department.
 
-This spec introduces:
-1. **Teams** as first-class entities — dynamic, chairman-created, extensible
-2. **Hierarchical Agents view** — org chart showing team structure
-3. **Cross-team collaboration** — structured task + context passing between team leads
+This spec introduces a **corporate hierarchy** with three layers:
 
-The key constraint: **teams are dynamic**. The Chairman can add new teams at any time. No team names or structures are hardcoded.
+```
+Chairman (you)
+├── CEO
+│   ├── Engineering          ← department (clickable)
+│   │   ├── VP of Engineering
+│   │   │   ├── Senior Engineer
+│   │   │   ├── Engineer
+│   │   │   └── Intern
+│   │   └── ...
+│   └── Product              ← department (clickable)
+│       ├── Head of Product
+│       └── ...
+├── CTO
+│   └── Research Lab          ← department (clickable)
+│       ├── Principal Investigator
+│       │   ├── Research Scientist
+│       │   └── Research Intern
+│       └── ...
+└── [Other C-suite]
+```
+
+**Key UX**: The top-level view shows Chairman → C-suite → Departments as collapsed nodes. Clicking a department expands it into its own internal tree showing the full team hierarchy (leaders, employees, interns).
 
 ---
 
 ## Architecture
 
-### Team as a first-class entity
+### Three-tier hierarchy
 
-A team is a named group with one **lead** and any number of **members**. The lead is the external interface of the team — all cross-team tasks enter and exit through the lead.
+1. **Chairman** — the user. Root of the tree. Passive observer.
+2. **C-suite** — executive agents (CEO, CTO, COO, etc.) that report directly to Chairman. Each oversees one or more departments.
+3. **Departments** — organizational units (Engineering, Research Lab, Product, etc.). Each department is a **team** with internal hierarchy.
 
-```
-Chairman
-├── Research Team          ← team entity
-│   ├── Lead: Principal Investigator
-│   └── Members: Research Assistant, ...
-├── Engineering Team       ← team entity
-│   ├── Lead: Product Manager
-│   └── Members: Architect, Senior Engineer, QA Engineer, Intern, ...
-└── [New Team]             ← Chairman can add at any time
-    ├── Lead: [agent]
-    └── Members: [agents]
-```
+### Agent rank levels
+
+Within a department, agents have a `rank` field:
+
+| Rank | Level | Description |
+|---|---|---|
+| `executive` | 0 | C-suite (CEO, CTO). Reports to Chairman. |
+| `director` | 1 | Department head (VP Engineering, Head of Product). Reports to a C-suite exec. |
+| `lead` | 2 | Team lead within a department. Reports to director. |
+| `senior` | 3 | Senior individual contributor. Reports to lead or director. |
+| `member` | 4 | Regular contributor. Reports to lead or director. |
+| `intern` | 5 | Entry-level. Reports to any senior+ agent. |
+
+### Department as a group entity
+
+A department is a named group stored as `teams/{id}/team.json`. It references:
+- A **department head** (director-level agent)
+- An **executive sponsor** (C-suite agent it reports into)
+- A list of **member agent IDs**
+
+The internal tree structure within a department is derived from `reports_to` chains — not flattened.
 
 ### Communication rules
 
-- **Within a team**: members report to lead; lead reports to Chairman
-- **Cross-team**: Lead → Lead only. Team members do NOT directly contact agents in other teams
-- **Escalation**: always goes up within the team first, then to Chairman if the lead is also blocked
-- **Chairman**: passive observer; only contacted when all leads are blocked
-
-### Context packet (cross-team handoff)
-
-When a lead passes a task to another team's lead, a **context packet** travels with it:
-
-```json
-{
-  "from_team": "engineering",
-  "to_team": "research",
-  "task": "...",
-  "why": "We need this to complete the auth module",
-  "known": "JWT is the chosen approach, user table schema is attached",
-  "expected_output": "A security analysis report in markdown"
-}
-```
+- **Within a department**: agents report up through the chain (intern → lead → director)
+- **Cross-department**: director → director only. Lower-rank agents do NOT directly contact other departments
+- **To Chairman**: only C-suite executives escalate to Chairman. Lower agents escalate up through the chain
+- **Cross-team context**: when a director passes work to another department, a context packet travels with it (same as before)
 
 ---
 
 ## User Scenarios & Testing
 
-### User Story 1 — View the org chart (Priority: P1)
+### User Story 1 — View the corporate org chart (Priority: P1)
 
-As Chairman, I want to see the entire organization as a hierarchy tree so I can understand who reports to whom and which team is doing what.
+As Chairman, I want to see the organization as a multi-level tree: Chairman → C-suite → Departments (collapsed) — so I can quickly understand the structure.
 
-**Why this priority**: This is the primary visualization goal of the feature.
-
-**Independent Test**: Open the Agents tab. See a tree layout with Chairman at top, teams as branches, leads below Chairman, members below leads. Running agents show a green dot.
+**Independent Test**: Open the Agents tab. See Chairman at top, C-suite below, departments as collapsed nodes with member count badges. No need to scroll through every agent.
 
 **Acceptance Scenarios**:
 
-1. **Given** 3 teams exist (Research, Engineering, a new custom team), **When** I open the Agents tab, **Then** I see a tree with 3 branches under Chairman, each showing the team name and lead
-2. **Given** an agent is currently running, **When** I view the org chart, **Then** that agent's node shows a live green dot
-3. **Given** I add a new team via the UI, **When** I return to the org chart, **Then** the new team appears as a new branch without page reload
-4. **Given** an agent has no team assigned, **When** I view the org chart, **Then** it appears in an "Unassigned" section below the tree (not lost)
+1. **Given** 2 C-suite agents (CEO, CTO) and 3 departments, **When** I open the Agents tab, **Then** I see Chairman → CEO/CTO → their respective departments as labeled nodes
+2. **Given** a department node shows "Engineering (4)", **When** I see it, **Then** the "(4)" indicates 4 agents within that department
+3. **Given** an agent is running in a department, **When** I view the top-level tree, **Then** that department node shows a green activity dot
 
 ---
 
-### User Story 2 — Create and manage teams (Priority: P1)
+### User Story 2 — Drill into a department (Priority: P1)
 
-As Chairman, I want to create a new team by giving it a name and assigning a lead agent, so the org can grow without any hardcoded limits.
+As Chairman, I want to click on a department (e.g. "Research Lab") to see its internal team tree — showing the hierarchy from director down to interns.
 
-**Why this priority**: The entire feature is built on dynamic teams. Without this, hierarchy is static.
-
-**Independent Test**: Click "New Team", enter name "Data Team", assign lead "data-analyst", confirm. The org chart gains a new branch.
+**Independent Test**: Click "Research Lab" node. The view expands (or navigates) to show the department's internal tree: Principal Investigator → Research Scientists → Interns.
 
 **Acceptance Scenarios**:
 
-1. **Given** I click "New Team" and fill in name + lead, **When** I confirm, **Then** a new team appears in the org chart immediately
-2. **Given** a team exists, **When** I add an agent to it as a member, **Then** that agent appears as a child of the team lead in the org chart
-3. **Given** a team has a lead, **When** I change the lead to a different agent, **Then** the old lead becomes a regular member and the new lead is elevated
-4. **Given** I delete a team, **When** confirmed, **Then** member agents become "Unassigned" (not deleted) and the team branch is removed
+1. **Given** I click on "Research Lab", **When** it expands, **Then** I see a tree rooted at the department head (e.g. Principal Investigator), with all members arranged by `reports_to`
+2. **Given** a department has 3 levels (director → lead → intern), **When** expanded, **Then** the tree shows all 3 levels with proper indentation
+3. **Given** I click the department again (or a "collapse" button), **When** it collapses, **Then** I return to the top-level view
+4. **Given** an agent within the department is running, **When** I view the expanded tree, **Then** that agent shows a green dot and running status
 
 ---
 
-### User Story 3 — Cross-team task delegation with context (Priority: P2)
+### User Story 3 — Create and manage teams (Priority: P1)
 
-As a team lead agent, I want to pass a task to another team's lead with a structured context packet, so the receiving team understands not just *what* to do but *why* and *what's already known*.
+As Chairman, I want to create a new department, assign an executive sponsor and department head, and add members.
 
-**Why this priority**: Without context, cross-team handoffs lose information and produce misaligned results.
-
-**Independent Test**: Engineering Lead delegates to Research Lead via MCP `cross_team_delegate` tool. Research Lead receives task + context packet. Engineering Lead gets a result back when Research Team is done.
+**Independent Test**: Click "New Department", enter name "Data Science", assign executive sponsor "CTO", assign department head, confirm. A new department node appears.
 
 **Acceptance Scenarios**:
 
-1. **Given** PM (Engineering lead) calls `cross_team_delegate` with task + why + known + expected_output, **Then** PI (Research lead) receives a mission with all four fields visible in the mission context
-2. **Given** Research Team completes the delegated task, **When** PI calls `report`, **Then** the result is delivered back to PM's mission (not just to Chairman inbox)
-3. **Given** a cross-team task is in flight, **When** I view the Inbox, **Then** I can see the cross-team handoff as a distinct event showing from-team → to-team
-4. **Given** the receiving lead is busy (agent running), **When** a cross-team delegate arrives, **Then** it queues and the lead picks it up on their next run
+1. **Given** I click "New Department" and fill in name + executive sponsor + department head, **When** I confirm, **Then** a new department node appears under the chosen executive
+2. **Given** a department exists, **When** I add an agent to it, **Then** that agent appears within the department's internal tree
+3. **Given** I want to restructure, **When** I move an agent between departments, **Then** their `reports_to` updates and they appear in the new department
+4. **Given** I delete a department, **When** confirmed, **Then** member agents become "Unassigned" (not deleted)
 
 ---
 
-### User Story 4 — Hire an agent directly into a team (Priority: P2)
+### User Story 4 — Cross-department delegation with context (Priority: P2)
 
-As Chairman, when hiring a new agent (manually or via Smart Hire), I want to assign them to a team immediately so they appear in the org chart in the right place.
-
-**Why this priority**: Without this, hired agents land in "Unassigned" and must be manually placed.
-
-**Independent Test**: In the Hire modal, there is a "Team" dropdown. Select "Research Team". New agent appears under Research Team in org chart.
+As a department head, I want to pass a task to another department's head with structured context, so the receiving department understands what to do, why, and what's already known.
 
 **Acceptance Scenarios**:
 
-1. **Given** I hire a new agent and select "Research Team", **When** hire completes, **Then** the agent appears as a member under PI in the org chart
-2. **Given** Smart Hire infers the department from the description, **When** hire completes, **Then** the agent is automatically placed in the matching team
-3. **Given** no matching team exists for the inferred department, **When** hired, **Then** the agent is placed in "Unassigned"
+1. **Given** Engineering director calls `cross_team_delegate` with task + context, **Then** Research director receives the task with full context
+2. **Given** a cross-department task completes, **When** the research director reports, **Then** the result goes back to the engineering director (not Chairman)
+3. **Given** a cross-department handoff is in flight, **When** I view the Inbox, **Then** I see it as a distinct event showing department→department
+
+---
+
+### User Story 5 — Hire into the hierarchy (Priority: P2)
+
+As Chairman, when hiring a new agent (manually or Smart Hire), I want to place them in a department at the right rank level.
+
+**Acceptance Scenarios**:
+
+1. **Given** Smart Hire infers department "Engineering" and rank "member", **When** hired, **Then** the agent appears in Engineering under the correct lead
+2. **Given** I hire a C-suite agent (e.g. COO), **When** hired, **Then** they appear as a direct report of Chairman at the top level
 
 ---
 
 ### Edge Cases
 
-- What if a lead agent is fired? → Team still exists; needs a new lead assigned before it can function. Show warning in org chart: "Team has no lead"
-- What if a member is assigned to two teams? → Not allowed. One agent = one team. Enforce on write.
-- What if `reports_to` in `profile.json` contradicts team membership? → Team membership wins. `reports_to` is derived from team structure, not the other way around.
-- What is the maximum team size? → No enforced limit.
-- Can Chairman be a team lead? → No. Chairman is above all teams.
-- Can a team lead be a member of another team? → No. Lead role is exclusive.
-- What if cross-team delegate target lead is in a running mission? → Queue the task as a pending message. Lead processes it on next available run.
+- What if a C-suite agent is fired? → Their departments become "unsponsored" — show warning. Chairman must reassign.
+- What if a department head is fired? → Department still exists but shows "No Head" warning. Chairman must assign a new one.
+- What if an agent's `reports_to` points to someone outside their department? → Department membership wins. `reports_to` is corrected to the department head.
+- Can an agent be in multiple departments? → No. One agent = one department.
+- Can Chairman be a department head? → No. Chairman is above all departments and executives.
+- Maximum depth of hierarchy within a department? → No enforced limit, but typical is 2-3 levels.
 
 ---
 
@@ -148,63 +161,88 @@ As Chairman, when hiring a new agent (manually or via Smart Hire), I want to ass
 
 ### Data Model
 
-**Team schema** (`teams/{id}/team.json`):
+**Team/Department schema** (`teams/{id}/team.json`):
 ```json
 {
-  "id": "research-team",
-  "name": "Research Team",
-  "lead": "principal-investigator",
-  "members": ["research-assistant"],
+  "id": "engineering",
+  "name": "Engineering",
+  "executive_sponsor": "ceo",
+  "head": "vp-engineering",
+  "members": ["senior-engineer", "engineer-1", "intern-1"],
   "created_at": "ISO"
 }
 ```
 
-**Agent profile update** — add `team` field:
+**Agent profile update** — add `rank` and `team` fields:
 ```json
 {
-  "id": "research-assistant",
-  "team": "research-team",
-  "reports_to": "principal-investigator"
+  "id": "senior-engineer",
+  "rank": "senior",
+  "team": "engineering",
+  "reports_to": "vp-engineering"
 }
 ```
 
-`reports_to` is now **derived** from team structure (always = team lead), kept for backwards compatibility.
+### UI Layout
 
-### New MCP Tool: `cross_team_delegate`
+**Top-level view (collapsed)**:
+```
+Chairman ────────────────────── [You]
+├── CEO ──────────────────── executive
+│   ├── Engineering (4) ──── [click to expand]
+│   └── Product (2) ──────── [click to expand]
+└── CTO ──────────────────── executive
+    └── Research Lab (3) ─── [click to expand]
+```
+
+**Expanded department view** (e.g. click "Engineering"):
+```
+← Back to Org Chart
+
+Engineering
+├── VP of Engineering ──── director
+│   ├── Senior Engineer ── senior
+│   ├── Engineer ────────── member
+│   └── Intern ──────────── intern
+```
+
+### MCP Tool: `cross_team_delegate`
 
 ```
 cross_team_delegate(
-  to_team: string,          // team ID
-  task: string,             // what to do
-  why: string,              // why this is needed
-  known: string,            // relevant context / prior work
-  expected_output: string   // format or type of result expected
+  to_team: string,
+  task: string,
+  why: string,
+  known: string,
+  expected_output: string
 ) → { handoff_id: string }
 ```
 
-Only callable by agents who are team leads. Non-leads get an error: "Only team leads can delegate cross-team."
+Only callable by agents with rank `director` or `executive`. Others get an error.
 
 ### Functional Requirements
 
-- **FR-001**: Teams MUST be stored as files in `teams/{id}/team.json` (dynamic, not hardcoded)
-- **FR-002**: The Agents tab MUST render a tree layout (org chart) as the primary view
-- **FR-003**: Each team node MUST show: team name, lead name, member count, running status
-- **FR-004**: The tree MUST update in real time via WebSocket when agent status changes
-- **FR-005**: `GET /api/teams` MUST return all teams with their leads and members resolved
-- **FR-006**: `POST /api/teams` MUST create a new team (name + lead required)
-- **FR-007**: `PATCH /api/teams/:id` MUST allow adding/removing members and changing lead
-- **FR-008**: `DELETE /api/teams/:id` MUST move members to "Unassigned", not delete agents
-- **FR-009**: New MCP tool `cross_team_delegate` MUST only be callable by team leads
-- **FR-010**: Cross-team handoffs MUST appear as a distinct event type in the Inbox
-- **FR-011**: Hiring (manual + smart) MUST include a team assignment field
-- **FR-012**: An agent with no team MUST appear in an "Unassigned" section in the org chart
+- **FR-001**: Teams/departments MUST be stored in `teams/{id}/team.json`
+- **FR-002**: The Agents tab MUST show a top-level tree: Chairman → C-suite → Departments (collapsed)
+- **FR-003**: Clicking a department MUST expand/navigate to show its internal hierarchy tree
+- **FR-004**: Each department node MUST show: name, member count, running status indicator
+- **FR-005**: Each agent node MUST show: title, rank badge, running status
+- **FR-006**: `GET /api/teams` MUST return all departments with resolved members and hierarchy
+- **FR-007**: `POST /api/teams` MUST create a new department (name + executive sponsor + head required)
+- **FR-008**: `PATCH /api/teams/:id` MUST allow adding/removing members and changing head
+- **FR-009**: `DELETE /api/teams/:id` MUST move members to "Unassigned", not delete agents
+- **FR-010**: `cross_team_delegate` MUST only be callable by director+ rank agents
+- **FR-011**: Cross-department handoffs MUST appear as distinct events in Inbox
+- **FR-012**: Hiring MUST include department + rank assignment (inferred by Smart Hire, manual for regular hire)
+- **FR-013**: Agents with no department MUST appear in "Unassigned" section
+- **FR-014**: The tree MUST update in real time via WebSocket
 
 ---
 
 ## Success Criteria
 
-- **SC-001**: Chairman can read the entire org structure in under 5 seconds by looking at the org chart
-- **SC-002**: Adding a new team takes < 30 seconds (name + lead, confirm)
-- **SC-003**: Cross-team context packet eliminates the "why are we doing this" question — the receiving lead has all information needed to start immediately
-- **SC-004**: No agent is ever lost — all agents appear in org chart (tree or Unassigned)
-- **SC-005**: The org chart is fully dynamic — reflects real state with no page refresh needed
+- **SC-001**: Chairman can see the full org structure at a glance in < 3 seconds (collapsed view)
+- **SC-002**: Drilling into a department to see team details takes one click
+- **SC-003**: Adding a new department takes < 30 seconds
+- **SC-004**: No agent is ever lost — all appear in tree or Unassigned
+- **SC-005**: Org chart is fully dynamic — no page refresh needed
