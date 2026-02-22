@@ -3,7 +3,7 @@
   "checkpoint_id": "4c9a0d4c926c",
   "strategy": "manual-commit",
   "branch": "main",
-  "checkpoints_count": 1,
+  "checkpoints_count": 2,
   "files_touched": [
     ".gitignore",
     "agents/architect/profile.json",
@@ -14,6 +14,7 @@
     "agents/research-assistant/profile.json",
     "agents/senior-engineer/profile.json",
     "server/src/index.ts",
+    "server/src/lib/SmartHire.ts",
     "server/src/routes/hire.ts"
   ],
   "sessions": [
@@ -30,13 +31,20 @@
       "context": "/4c/9a0d4c926c/1/context.md",
       "content_hash": "/4c/9a0d4c926c/1/content_hash.txt",
       "prompt": "/4c/9a0d4c926c/1/prompt.txt"
+    },
+    {
+      "metadata": "/4c/9a0d4c926c/2/metadata.json",
+      "transcript": "/4c/9a0d4c926c/2/full.jsonl",
+      "context": "/4c/9a0d4c926c/2/context.md",
+      "content_hash": "/4c/9a0d4c926c/2/content_hash.txt",
+      "prompt": "/4c/9a0d4c926c/2/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 506,
-    "cache_creation_tokens": 6344780,
-    "cache_read_tokens": 26060215,
-    "output_tokens": 118965,
-    "api_call_count": 335
+    "input_tokens": 560,
+    "cache_creation_tokens": 6572357,
+    "cache_read_tokens": 30480152,
+    "output_tokens": 140458,
+    "api_call_count": 383
   }
 }
