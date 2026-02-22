@@ -1,0 +1,110 @@
+Implement the following plan:
+
+# Plan: Implement Spec 003 — Smart Hire
+
+## Context
+
+The current "Hire Agent" flow is a manual form (ID, title, department, description, system_prompt). Spec 003 wants a **natural-language-in, hired-agent-out** flow: Chairman describes a need → system generates 3 candidates → each runs a standardized test in parallel → LLM scores results → best candidate auto-hired. All events stream to Live Log via WebSocket.
+
+## Architecture
+
+The heavy lifting (LLM candidate generation + LLM scoring) happens server-side. The client just provides a text input + shows progress via Live Log (already wired). We use Claude API (via `@anthropic-ai/sdk`) directly for the meta-prompts (candidate generation + scoring), NOT by spawning `claude` CLI.
+
+## Implementation (3 commits)
+
+### Commit 1: Server — Smart Hire engine + route
+
+**File: `server/src/lib/SmartHire.ts`** (new)
+
+Core engine with 3 phases:
+
+1. **Generate candidates** — Call Claude API with the spec's meta-prompt to produce 3 candidate profiles (JSON array with id, title, department, description, reports_to, system_prompt)
+2. **Run interviews** — For each candidate, spawn `claude --dangerously-skip-permissions -p "{test_task}"` in parallel with 60s timeout. Capture stdout as test output. Use standardized test tasks per department (from spec).
+3. **Score & select** — Call Claude API with a scoring prompt: pass each candidate's profile + test output, ask for 0-10 scores on 4 dimensions (task_completion 40%, output_quality 30%, autonomy 20%, conciseness 10%). Parse scores, compute weighted average, pick winner.
+4. **Hire winner** — Create agent directory + profile.json + memory.md (reuse existing `POST /api/hire` logic inline).
+5. **Archive results** — Save full interview record to `archive/interviews/H-{timestamp}.json`.
+
+All phases broadcast events: `hire:start`, `hire:candidates`, `hire:interview_start`, `hire:interview_done`, `hire:scores`, `hire:complete`, `hire:error`.
+
+**File: `server/src/routes/hire.ts`** (edit)
+
+Add `POST /api/hire/smart` route:
+- Body: `{ description: string }`
+- Validates non-empty description
+- Calls `runSmartHire(description)` (async, returns immediately)
+- Returns `{ ok: true, hireId }`
+
+### Commit 2: Client — Smart Hire UI
+
+**File: `client/src/App.tsx`** (edit)
+
+Replace the manual hire form modal with Smart Hire:
+
+- "Smart Hire" button in Agents tab header (replaces "+ Hire Agent")
+- Modal: single textarea for natural language description + "Start Interview" button
+- On submit: `POST /api/hire/smart` → close modal
+- Progress shown in Live Log (already handles unknown events gracefully)
+
+Add WebSocket handlers:
+- `hire:complete` → append new agent to agents state (same as current `hireAgent` does)
+- `hire:error` → show error in Live Log
+
+Keep the existing manual hire route working (just remove the UI button — API stays).
+
+### Commit 3: Client — Interview progress display
+
+**File: `client/src/App.tsx`** (edit)
+
+Add a hiring status indicator:
+- When `hire:start` received, set `hiringInProgress` state
+- Show a subtle banner or pill in the header: "Interviewing candidates..."
+- When `hire:complete` or `hire:error`, clear the state
+- Live Log handles all the detailed events automatically via existing WS handler
+
+WebSocket events to handle in Live Log (using existing `appendLog` pattern):
+- `hire:start` → `[hire] Generating 3 candidates for: "{description}"`
+- `hire:candidates` → `[hire] Generated: candidate-1, candidate-2, candidate-3`
+- `hire:interview_start` → `[hire] Interviewing {candidateId}...`
+- `hire:interview_done` → `[hire] {candidateId} finished (exit {code})`
+- `hire:scores` → `[hire] Scores: {c1}: {s1} / {c2}: {s2} / {c3}: {s3}`
+- `hire:complete` → `[hire] Hired: {title} ({id})`
+- `hire:error` → `[hire] Failed: {message}`
+
+## Files to modify
+
+| File | Action |
+|---|---|
+| `server/src/lib/SmartHire.ts` | **Create** — smart hire engine |
+| `server/src/routes/hire.ts` | **Edit** — add `POST /api/hire/smart` |
+| `client/src/App.tsx` | **Edit** — smart hire modal + WS events |
+| `server/package.json` | **Edit** — add `@anthropic-ai/sdk` dependency |
+| `.gitignore` | Already has `archive/` |
+
+## Key decisions
+
+- **Claude API via SDK**, not CLI spawning, for candidate generation + scoring (faster, structured output, no process overhead)
+- **CLI spawning for interviews** — reuse the same `claude --dangerously-skip-permissions -p` pattern that AgentRunner uses, but simplified (no MCP injection, just a raw test in /tmp)
+- **60s timeout** per interview candidate, all 3 run in parallel
+- **No "review before hire" in v1** — auto-hire the winner (P2 feature per spec)
+- **Archive interviews** to `archive/interviews/` for later inspection
+
+## Verification
+
+1. Start server + client
+2. Click "Smart Hire" in Agents tab
+3. Type "I need a database expert who can optimize SQL queries"
+4. Click "Start Interview"
+5. Watch Live Log: candidates generated → interviews running → scores → hired
+6. New agent appears in org tree under correct supervisor
+7. Check `archive/interviews/` for the full interview record
+
+
+If you need specific details from before exiting plan mode (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/junjie/.REDACTED.jsonl
+
+---
+
+现在implement 这个 spec 004
+
+---
+
+我想与entire.io这个项目结合 可以记录agent的对话和commit 这是第五个spec 你可以先调研一下entire.io 我觉得agent在工作的时候 要有自己的工作记录等等 （也可以是思想借鉴来实现entire.io) 调研后写一个spec!
