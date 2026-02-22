@@ -1,0 +1,35 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "4c9a0d4c926c",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".gitignore",
+    "agents/architect/profile.json",
+    "agents/intern/profile.json",
+    "agents/principal-investigator/profile.json",
+    "agents/product-manager/profile.json",
+    "agents/qa-engineer/profile.json",
+    "agents/research-assistant/profile.json",
+    "agents/senior-engineer/profile.json",
+    "server/src/index.ts",
+    "server/src/routes/hire.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/4c/9a0d4c926c/0/metadata.json",
+      "transcript": "/4c/9a0d4c926c/0/full.jsonl",
+      "context": "/4c/9a0d4c926c/0/context.md",
+      "content_hash": "/4c/9a0d4c926c/0/content_hash.txt",
+      "prompt": "/4c/9a0d4c926c/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 421,
+    "cache_creation_tokens": 6077652,
+    "cache_read_tokens": 20210261,
+    "output_tokens": 102759,
+    "api_call_count": 260
+  }
+}
