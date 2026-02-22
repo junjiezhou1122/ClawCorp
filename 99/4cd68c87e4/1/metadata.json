@@ -1,0 +1,31 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "994cd68c87e4",
+  "session_id": "6432b0a9-1408-4563-a05e-074257dcec3c",
+  "strategy": "manual-commit",
+  "created_at": "2026-02-22T11:29:50.489993Z",
+  "branch": "main",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "client/src/App.tsx"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "99cdaa65f0c6",
+  "token_usage": {
+    "input_tokens": 65,
+    "cache_creation_tokens": 247021,
+    "cache_read_tokens": 4079419,
+    "output_tokens": 10551,
+    "api_call_count": 57
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-02-22T11:29:50.176042Z",
+    "agent_lines": 0,
+    "human_added": 0,
+    "human_modified": 2,
+    "human_removed": 136,
+    "total_committed": 0,
+    "agent_percentage": 0
+  },
+  "transcript_path": ".claude/projects/-Users-junjie-research-ClawCorp/6432b0a9-1408-4563-a05e-074257dcec3c.jsonl"
+}
