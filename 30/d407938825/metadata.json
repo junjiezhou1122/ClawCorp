@@ -1,0 +1,28 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "30d407938825",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "client/src/App.tsx",
+    "server/src/lib/AgentRunner.ts",
+    "server/src/routes/run.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/30/d407938825/0/metadata.json",
+      "transcript": "/30/d407938825/0/full.jsonl",
+      "context": "/30/d407938825/0/context.md",
+      "content_hash": "/30/d407938825/0/content_hash.txt",
+      "prompt": "/30/d407938825/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 382,
+    "cache_creation_tokens": 4988332,
+    "cache_read_tokens": 17647593,
+    "output_tokens": 94386,
+    "api_call_count": 235
+  }
+}
