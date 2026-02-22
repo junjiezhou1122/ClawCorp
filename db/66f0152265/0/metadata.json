@@ -1,0 +1,32 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "db66f0152265",
+  "session_id": "442f141c-908d-431c-b446-8675c95fdcc8",
+  "strategy": "manual-commit",
+  "created_at": "2026-02-22T08:48:54.229401Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".specify/specs/001-team-boards/plan.md",
+    ".specify/specs/002-task-board/spec.md"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "5c00f4bca217",
+  "token_usage": {
+    "input_tokens": 351,
+    "cache_creation_tokens": 4610250,
+    "cache_read_tokens": 14698656,
+    "output_tokens": 85823,
+    "api_call_count": 210
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-02-22T08:48:53.78814Z",
+    "agent_lines": 0,
+    "human_added": 197,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 197,
+    "agent_percentage": 0
+  },
+  "transcript_path": ".claude/projects/-Users-junjie-research-ClawCorp/442f141c-908d-431c-b446-8675c95fdcc8.jsonl"
+}
