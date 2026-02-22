@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "b023e4e3308c",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".specify/specs/003-smart-hire/spec.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/b0/23e4e3308c/0/metadata.json",
+      "transcript": "/b0/23e4e3308c/0/full.jsonl",
+      "context": "/b0/23e4e3308c/0/context.md",
+      "content_hash": "/b0/23e4e3308c/0/content_hash.txt",
+      "prompt": "/b0/23e4e3308c/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 369,
+    "cache_creation_tokens": 4858629,
+    "cache_read_tokens": 16259267,
+    "output_tokens": 93362,
+    "api_call_count": 224
+  }
+}
