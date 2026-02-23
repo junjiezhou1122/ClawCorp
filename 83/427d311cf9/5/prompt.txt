@@ -1,0 +1,254 @@
+Implement the following plan:
+
+# Plan: Task Detail View — Per-Task Progress Dashboard
+
+## Context
+
+全局 Live Log 侧边栏把所有 agent 输出混在一起，dispatch 后 Chairman 看不到某个具体任务的进度。任务卡片只有标题/状态/按钮，没有详情。
+
+**目标**: 点击任务卡片 → 全屏详情覆盖层，展示该任务的一切：过滤后的 live log、agent 树、产出物、通讯、反馈。移除全局 Live Log 侧边栏。
+
+---
+
+## Commit 1: Server — `GET /api/tasks/:id/detail`
+
+**File: `server/src/routes/tasks.ts`**
+
+新增常量 `MISSIONS_DIR`, `AGENTS_DIR`，加 4 个 helper 函数 + 1 个路由：
+
+**Helpers:**
+- `buildMissionTree(rootMissionId)` — BFS 扫描所有 `missions/*/state.json`，沿 `parent_mission` 链收集完整 mission 树，返回 ID 数组
+- `scanArtifacts(missionId)` — readdir `missions/<id>/artifacts/`，返回相对路径
+- `collectMessages(missionId)` — 读取 `missions/<id>/messages/*.json`
+- `loadAgentProfile(agentId)` — 读取 `agents/<id>/profile.json`
+
+**Route `GET /:id/detail`:**
+1. 读 task state，无 `mission_id` 返回空数组
+2. BFS 构建 mission 树
+3. 加载树中所有 mission state
+4. 收集 assignee → 加载 agent profiles
+5. 每个 mission 扫 artifacts + messages
+6. 返回 `{ task, missions, agents: Record<string,Agent>, artifacts: Record<string,string[]>, messages }`
+
+---
+
+## Commit 2: Client — Task Detail Overlay + 移除全局侧边栏
+
+**File: `client/src/App.tsx`**
+
+### 新增 state
+
+```
+selectedTask: Task | null
+taskDetail: TaskDetail | null     // { task, missions, agents, artifacts, messages }
+taskDetailLoading: boolean
+taskMissionIds: Set<string>       // 用于 log 过滤的 mission ID 集合
+logFilterAgent: string | null     // 按 agent 过滤 log
+detailLogScrollRef               // 详情页 log 滚动 ref
+selectedTaskRef                  // ref 同步 selectedTask，WS 回调用
+```
+
+### 任务卡片改造
+
+- `<article>` 加 `onClick` → `openTaskDetail(t)`，用 `closest('button')` 防止按钮点击误触
+- `cursor-grab` → `cursor-pointer`
+
+### `openTaskDetail(task)` 函数
+
+设 `selectedTask`，fetch `GET /api/tasks/:id/detail`，从 response 中 seed `taskMissionIds`
+
+### WS handler 修改
+
+- **`task:updated`**: 同步更新 `selectedTask`；若 `mission_id` 首次出现，自动 re-fetch detail
+- **`mission:updated`**: `setMissions` 改为 "有则更新，无则新增"（当前只做更新）；若新 mission 的 `parent_mission` 在 `taskMissionIds` 中，扩展集合并加入 `taskDetail.missions`
+- **`agent:start`**: 若 `missionId` 前缀匹配 `taskMissionIds` 中的任何 ID，扩展集合（利用 delegate 命名规则 `parentId-agentId-ts`）
+
+### ESC 关闭
+
+`useEffect` 监听 `keydown`，ESC 清空 `selectedTask`/`taskDetail`/`taskMissionIds`
+
+### 详情覆盖层 JSX（全屏，非 modal-card）
+
+```
+┌─ Header ──────────────────────────────────────────────┐
+│ ← Back  │  title + status badge + assigned_to pill    │
+│         │  Dispatch / Push Back / Delete buttons       │
+├─ Left Sidebar (w-72) ─┬─ Main: Live Log ──────────────┤
+│ Routing reasoning      │ Agent filter chips + clear    │
+│ Agent Tree (live dots) │ Filtered log lines            │
+│ Artifacts list         │ (by taskMissionIds + agent)   │
+│ Communications         │ Empty state if not dispatched │
+│ Feedback history       │                               │
+└────────────────────────┴───────────────────────────────┘
+```
+
+### Log 过滤逻辑
+
+显示 `logs` 中满足以下条件的行：
+- `missionId` 在 `taskMissionIds` 中，或前缀匹配集合中的 ID
+- 或 `agentId === 'dispatch'`（routing 阶段的 log）
+- 再叠加 `logFilterAgent` 过滤
+
+### 移除全局侧边栏
+
+- 删除整个 `<aside>` 块（Live Log 右栏，约 25 行）
+- 父容器 `xl:flex-row` → `flex-col`（不再需要双栏）
+- 删除 `logScrollRef` 和其 auto-scroll useEffect
+- **保留** `logs` state 和 `appendLog` — 详情页 log 仍依赖它们
+
+---
+
+## 改动文件
+
+| File | Action |
+|---|---|
+| `server/src/routes/tasks.ts` | 编辑 — 加 `GET /:id/detail` + 4 个 helper |
+| `client/src/App.tsx` | 编辑 — 详情覆盖层 + 卡片点击 + WS 扩展 + 删侧边栏 |
+
+## 关键注意点
+
+- **delegate 不广播**: sub-mission 只能通过 `agent:start` 事件发现，用 missionId 前缀匹配捕获
+- **WS 闭包过期**: 用 `selectedTaskRef` 解决 WS 回调中 `selectedTask` 可能过期的问题
+- **全屏 vs modal**: 详情用 `fixed inset-0` 全屏，不用 `modal-card max-w-xl`
+
+## 验证
+
+1. 创建任务，点卡片 → 详情打开，空状态 "Dispatch the task to start"
+2. 点 Dispatch → live log 显示 routing/spawning
+3. Agent 启动 → agent 树更新绿点，log 流式输出
+4. Delegate 产生 sub-mission → 自动出现在 agent 树和 log 中
+5. Artifacts 面板随 agent 产出更新
+6. Messages 出现在 Communications 面板
+7. ESC 关闭详情，Board 全宽（无右侧边栏）
+8. 点 agent filter chip → log 只显示该 agent
+
+
+If you need specific details from before exiting plan mode (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/junjie/.REDACTED.jsonl
+
+---
+
+又出现了两个
+
+---
+
+[dispatch] [dispatch] Routing: "编写一个to do list project management 的软件"
+[dispatch] [dispatch] Routing: "编写一个to do list project management 的软件"
+[dispatch] [dispatch] → product-manager: Building a to-do list project management software is a software development task requiring product requirements and engineering execution.
+[dispatch] [dispatch] → product-manager: Building a to-do list project management software is a software development task requiring product requirements and engineering execution.
+[dispatch] [dispatch] Spawning product-manager...
+[dispatch] [dispatch] Spawning product-manager...
+[dispatch] [dispatch] Routing: "编写一个to do list project management 的网页"
+[dispatch] [dispatch] Routing: "编写一个to do list project management 的网页"
+[dispatch] [dispatch] Routing: "编写一个to do list project management 的网页"
+[dispatch] [dispatch] → product-manager: Building a to-do list project management webpage is a software development task requiring product requirements and engineering implementation.
+[dispatch] [dispatch] → product-manager: Building a to-do list project management webpage is a software development task requiring product requirements and engineering implementation.
+[dispatch] [dispatch] → product-manager: Building a to-do list project management webpage is a software development task requiring product requirements and engineering implementation.
+[dispatch] [dispatch] Spawning product-manager...
+[dispatch] Error: Failed to spawn product-manager: Agent product-manager is already running
+[dispatch] [dispatch] Spawning product-manager...
+[dispatch] Error: Failed to spawn product-manager: Agent product-manager is already running
+[dispatch] [dispatch] Spawning product-manager...
+[dispatch] Error: Failed to spawn product-manager: Agent product-manager is already running 这里log有很多问题啊 为啥同一个内容重复多遍 检查一下
+
+---
+
+我刷新一下网页这里就成这个样了 而且 product managemer 好像不会把东西delegate给下面的子agent去做
+
+---
+
+[Request interrupted by user]
+
+---
+
+好像没断
+
+---
+
+但好像这次没有delegate给senior-engineer
+
+---
+
+[dispatch] [dispatch] Routing: "编写一个to do list project management 的网页"
+[dispatch] [dispatch] → product-manager: Building a to-do list project management webpage is a software development task requiring technical implementation.
+[dispatch] [dispatch] Spawning product-manager...
+[product-manager] > started in /Users/junjie/research/ClawCorp/server
+Both subordinates have delivered. Here is my report to the Chairman.
+
+---
+
+## Report to Chairman — Mission M-1771834002760
+
+**Task:** Build a To-Do List Project Management Webpage
+
+**Status: COMPLETE**
+
+---
+
+### Deliverables
+
+| Artifact | Location | Owner |
+|---|---|---|
+| PRD | `artifacts/PRD.md` | PM |
+| Architecture Design | `artifacts/ARCHITECTURE.md` | Architect |
+| Working Web App | `artifacts/index.html` | Senior Engineer |
+
+---
+
+### What Was Built
+
+A fully functional, self-contained to-do list project management web app. Open `artifacts/index.html` in any browser — no server or build step required.
+
+**Key features shipped:**
+- **Projects** — create, rename, delete; each shows task count badge and completion progress bar
+- **Tasks** — title, due date, priority (High/Medium/Low), status toggle, edit, delete, overdue highlighting
+- **Views** — sidebar navigation (All Tasks + per-project), filter tabs (All/Active/Completed), sort by due date or priority
+- **Persistence** — full state saved to `localStorage` on every change
+- **Polish** — responsive layout with mobile hamburger menu, empty states, confirmation dialogs, fade-in animations, no external icon dependencies
+
+**Tech stack:** React 18 + Babel (CDN, no build tool), Tailwind CSS (CDN), plain localStorage.
+
+---
+
+### Assumptions Made
+
+1. MVP is single-user, no auth required
+2. Self-contained HTML file preferred over a full Vite project for immediate runnability
+3. Chinese/English UI not explicitly themed — English used for MVP, easily swappable
+[product-manager] < done (exit 0) 这是什么问题呢
+
+---
+
+你觉得这种该如何解决呢！
+
+---
+
+2. Workspace 隔离
+  Executive 的工作目录里放 CLAUDE.md，写死 "禁止写代码，只能用 delegate"。Claude Code
+  会自动加载这个文件，双重约束。 我觉得这个也很好！ 我想知道的是每个agent来工作的时候 他们是有自己的一个workspace吗
+
+---
+
+[dispatch] [dispatch] Routing: "编写一个to do list project management 的网页"
+[dispatch] [dispatch] → product-manager: Building a to-do list project management webpage is a software development task requiring technical implementation.
+[dispatch] [dispatch] Spawning product-manager...
+[dispatch] [dispatch] Routing: "编写一个to do list project management 的网页软件" 为啥又有这种重复的
+
+---
+
+在创建这些的时候还会创建一些附属文件夹 其实没啥意义 我们只需要在同一个工作区工作 这样大家的文件都可以写在一起 （虽然最后文件也是写在一起的）那这个M-1...-architect这样的文件夹创建的意义是啥呢？
+
+---
+
+[Request interrupted by user]
+
+---
+
+continue
+
+---
+
+我觉得每个mission目录下面 有一些子文件夹 就是sub agent的一些内容 例如 M-1771..../architect/ or M-17..../senior-engineer 这种！
+
+---
+
+commit一下
