@@ -502,13 +502,11 @@ export default function App() {
 
   async function createTask() {
     if (!newTaskTitle.trim()) return
-    const res = await fetch('/api/tasks', {
+    await fetch('/api/tasks', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title: newTaskTitle }),
     })
-    const task = await res.json()
-    setTasks((p) => [...p, task])
     setNewTaskTitle('')
   }
 
@@ -550,6 +548,25 @@ export default function App() {
     )
     setPushBackTarget(null)
     setPushBackText('')
+  }
+
+  async function runTask(task: Task) {
+    // Create a mission from this task
+    const res = await fetch('/api/missions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: task.title, type: 'engineering', workspace: null }),
+    })
+    const mission = await res.json()
+    setMissions((p) => [...p, mission])
+
+    // Open the run modal pre-filled with task info
+    setRunTarget({
+      missionId: mission.id,
+      prompt: task.title,
+      workspace: '',
+      sessions: {},
+    })
   }
 
   async function selectChannel(channelId: string) {
@@ -957,6 +974,14 @@ export default function App() {
                                 )}
 
                                 <div className="mt-2 flex gap-1.5">
+                                  {col !== 'done' && (
+                                    <button
+                                      onClick={() => runTask(t)}
+                                      className="btn-base btn-primary flex-1 py-1.5 text-xs"
+                                    >
+                                      Run
+                                    </button>
+                                  )}
                                   {col === 'review' && (
                                     <button
                                       onClick={() => setPushBackTarget(t)}
