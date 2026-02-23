@@ -3,12 +3,13 @@
   "checkpoint_id": "83427d311cf9",
   "strategy": "manual-commit",
   "branch": "main",
-  "checkpoints_count": 2,
+  "checkpoints_count": 3,
   "files_touched": [
     "agents/architect/profile.json",
     "client/src/App.tsx",
     "client/src/hooks/useWebSocket.ts",
     "server/src/lib/AgentRunner.ts",
+    "server/src/lib/AutoDispatch.ts",
     "server/src/mcp/server.ts",
     "server/src/routes/delegate.ts",
     "server/src/routes/tasks.ts"
@@ -34,13 +35,20 @@
       "context": "/83/427d311cf9/2/context.md",
       "content_hash": "/83/427d311cf9/2/content_hash.txt",
       "prompt": "/83/427d311cf9/2/prompt.txt"
+    },
+    {
+      "metadata": "/83/427d311cf9/3/metadata.json",
+      "transcript": "/83/427d311cf9/3/full.jsonl",
+      "context": "/83/427d311cf9/3/context.md",
+      "content_hash": "/83/427d311cf9/3/content_hash.txt",
+      "prompt": "/83/427d311cf9/3/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 623,
-    "cache_creation_tokens": 7093665,
-    "cache_read_tokens": 36909893,
-    "output_tokens": 149151,
-    "api_call_count": 433
+    "input_tokens": 703,
+    "cache_creation_tokens": 7649942,
+    "cache_read_tokens": 42277298,
+    "output_tokens": 175508,
+    "api_call_count": 495
   }
 }
