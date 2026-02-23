@@ -1,0 +1,176 @@
+Implement the following plan:
+
+# Plan: Auto-Dispatch — 任务自动路由到层级链
+
+## Context
+
+当前 Chairman 要手动选 agent 来执行任务。真实工作流应该是：**Chairman 给一个任务 → 系统自动判断该谁管 → 派给对应高管 → 高管往下安排 → agent 做事**。Chairman 只需要观察进度。
+
+现有基础设施已经支持级联：agents 有 `delegate` MCP 工具，system_prompt 里写了该委派给谁，sub-mission 会自动启动 sub-agent。**缺的是：任务 → 高管 的自动路由。**
+
+## 架构
+
+```
+Chairman 创建 task: "搭建用户认证系统"
+  │
+  ▼
+POST /api/tasks/:id/dispatch
+  │
+  ├─ LLM 路由 (Sonnet, ~1s): 读取高管 profiles → 选 product-manager
+  ├─ 创建 mission，关联 task
+  └─ runAgent("product-manager", missionId, prompt)
+       │
+       ▼ product-manager 启动，分析任务，决定委派
+       ├─ delegate("architect", "设计认证架构")
+       │    └─ architect 启动 → delegate("senior-engineer", "实现JWT") → ...
+       └─ report("认证系统已规划并委派")
+```
+
+## 实现 (2 commits)
+
+### Commit 1: Server — AutoDispatch 引擎 + dispatch 路由
+
+**File: `server/src/lib/AutoDispatch.ts`** (new)
+
+`autoDispatch(taskId, taskTitle, workspace?)`:
+1. 读取所有 `rank=executive` 的 agent profiles
+2. 读取 teams 信息
+3. 调 Claude API (Sonnet, max_tokens 512) 做路由决策 → `{ executive_id, reasoning, suggested_approach }`
+4. 创建 mission (`missions/{missionId}/state.json`)，关联 task
+5. 调 `runAgent(executiveId, missionId, prompt)` 启动高管
+6. 广播事件: `dispatch:start`, `dispatch:routed`, `dispatch:spawning`, `dispatch:error`
+
+路由规则（写在 LLM prompt 里）:
+- 软件/代码/架构/技术实现 → `product-manager`（管 engineering）
+- 研究/分析/实验/调研 → `principal-investigator`
+- 不确定 → 默认 `product-manager`
+- LLM 解析失败 → fallback `product-manager`
+
+给高管的 prompt:
+```
+The Chairman has assigned this task to you via auto-dispatch.
+Task: {title}
+Routing reasoning: {reasoning}
+You may delegate to subordinates, cross-team delegate, or do it yourself.
+Use 'report' when done.
+```
+
+**File: `server/src/routes/tasks.ts`** (edit)
+
+加 `POST /api/tasks/:id/dispatch`:
+- Body: `{ workspace?: string }`
+- 更新 task status → `in_progress`
+- 调 `autoDispatch()` (async fire-and-forget)
+- 成功: 把 `mission_id`, `assigned_to` 写回 task state
+- 失败: task 退回 `backlog`，记录 `dispatch_error`
+- 返回 `{ ok: true, taskId, status: 'dispatching' }`
+
+### Commit 2: Client — Dispatch 按钮 + Live Log 事件
+
+**File: `client/src/App.tsx`** (edit)
+
+- Task type 加 `mission_id?`, `assigned_to?`, `routing_reasoning?`
+- "Run" 按钮改成 "Dispatch"
+  - 已 dispatch 的 task（有 `mission_id`）不显示按钮，改显示负责人名字
+- 删掉 `runTask()` 和手动 Run Mission modal（不再需要手选 agent）
+- 加 `dispatchTask(task)` → `POST /api/tasks/${id}/dispatch`
+- Live Log WebSocket 新事件:
+  - `dispatch:start` → `[dispatch] Routing: "{title}"`
+  - `dispatch:routed` → `[dispatch] → {executiveId}: {reasoning}`
+  - `dispatch:spawning` → `[dispatch] Spawning {executiveId}...`
+  - `dispatch:error` → `[dispatch] Error: {message}`
+
+## 改动文件
+
+| File | Action |
+|---|---|
+| `server/src/lib/AutoDispatch.ts` | **新建** — LLM 路由 + mission 创建 + agent 启动 |
+| `server/src/routes/tasks.ts` | **编辑** — 加 `POST /:id/dispatch` |
+| `client/src/App.tsx` | **编辑** — Dispatch 按钮，去掉手动 Run，WS 事件 |
+
+## 不需要改的（已有）
+
+- `delegate` MCP 工具 — 高管自动往下派活
+- `cross_team_delegate` — 跨部门协调
+- `runAgent()` — agent 启动 + MCP 注入
+- Agent system_prompts — 已经写好了谁该委派给谁
+- Sub-mission 创建 — delegate 路由自动创建并启动
+- Live Log — agent 输出已经实时流到 UI
+- Chat tab — agents 之间协调对 Chairman 可见
+
+## 边界情况
+
+- **高管正忙**: `runAgent` 抛错 → `dispatch:error` → task 退回 backlog
+- **LLM 返回坏 JSON**: regex fallback + 硬编码默认 product-manager
+- **LLM 选了不存在的高管**: 校验后 fallback 到第一个可用高管
+- **重复 dispatch**: UI 隐藏 Dispatch 按钮（已有 mission_id 就不显示）
+
+## 验证
+
+1. 创建 task: "Build a REST API for user management"
+2. 点 "Dispatch"
+3. Live Log: routing → picked product-manager → spawning
+4. product-manager 启动，delegate 给 architect
+5. architect delegate 给 senior-engineer
+6. 工作级联下去，report 逐级汇报上来
+7. Task 卡片显示 "product-manager" 标签
+
+
+If you need specific details from before exiting plan mode (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/junjie/.REDACTED.jsonl
+
+---
+
+我觉得每一个任务都应该有自己的一个进度 live log什么的 所以live log不要在右边栏 我希望用户点击可以进入这个任务的详细界面 可以看见和这个任务有关的任何内容 例如 任务现在的工作状态 生成了哪些东西等等！这些都是需要看见的！ 然后和其他agent的交流啊等等 先写一个spec，不用代码
+
+---
+
+[plugin:vite:react-babel] /Users/junjie/research/ClawCorp/client/src/App.tsx: Identifier 'newTitle' has already been declared. (219:9)
+  222 |
+/Users/junjie/research/ClawCorp/client/src/App.tsx:219:9
+217|    const [showSmartHire, setShowSmartHire] = useState(false)
+218|  
+219|    const [newTitle, setNewTitle] = useState('')
+   |           ^
+220|    const [smartHireDesc, setSmartHireDesc] = useState('')
+221|    const [hiringInProgress, setHiringInProgress] = useState(false) 这有个bug
+
+---
+
+[dispatch] Error: 500 {"error":{"type":"new_api_error","message":"当前模型 claude-sonnet-4-20250514 负载已经达到上限，请稍后重试 (request id: 20260223105554631132801l7Sw2RBP)"},"type":"error"} 最开始dispatch 你是指定模型了吗 整个流程是啥样的？
+
+---
+
+我这个api 只能claude code可以用 dispatch的时候你直接用相同的逻辑啊 dispatch也是一个agent呀
+
+---
+
+[dispatch] [dispatch] Routing: "用python编写一个贪吃蛇游戏"
+[dispatch] [dispatch] → product-manager: This is a software development task requiring code implementation, which falls under engineering management.
+[dispatch] [dispatch] Spawning product-manager...
+[product-manager] > started in /Users/junjie/research/ClawCorp/server
+**任务完成。** 以下是本次交付的完整摘要：
+
+---
+
+## 交付物 (Mission M-1771815738942)
+
+**路径：** `REDACTED`
+
+| 文件 | 说明 |
+|------|------|
+| `PRD-snake-game.md` | 产品需求文档 |
+| `snake.py` | 完整游戏源码 |
+| `REPORT.md` | 完成报告 |
+
+### 运行方式
+```bash
+python3 REDACTED.py
+```
+
+### 功能亮点
+- **零依赖**：仅用 Python 标准库 `curses`，开箱即用
+- **双控制方案**：方向键 + WASD 均支持
+- **难度递进**：每得 50 分速度提升，共 10+ 档位
+- **彩色 UI**：蛇（绿）/ 食物（红）/ 状态栏（黄）/ 边框（青）
+- **完整 Game Over 流程**：显示最终得分 + 最高分，`R` 重新开始，`Q` 退出
+[product-manager] < done (exit 0) 高管下面有这么多团队 为什么它的任务好像是自己完成的呢
