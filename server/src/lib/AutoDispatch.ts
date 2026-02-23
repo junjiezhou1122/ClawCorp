@@ -183,8 +183,12 @@ Task: ${taskTitle}
 Routing reasoning: ${routing.reasoning}
 Suggested approach: ${routing.suggested_approach}
 
-You may delegate to your subordinates, cross-team delegate, or handle it yourself.
-Use 'report' tool when done to report results back up the chain.`
+IMPORTANT: You are an EXECUTIVE. Your job is to PLAN and DELEGATE, not to implement.
+- Break the task into sub-tasks
+- Use 'delegate' to assign each sub-task to the appropriate subordinate
+- Do NOT write code, designs, or artifacts yourself — that is your team's job
+- You may write a brief plan/PRD before delegating, but implementation MUST be delegated
+- Use 'report' when all sub-tasks have been delegated and you have a summary of the plan`
 
   // 5. Spawn the executive agent
   broadcast('dispatch:spawning', { taskId, executiveId: routing.executive_id, missionId })
