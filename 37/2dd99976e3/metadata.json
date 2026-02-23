@@ -3,7 +3,7 @@
   "checkpoint_id": "372dd99976e3",
   "strategy": "manual-commit",
   "branch": "main",
-  "checkpoints_count": 3,
+  "checkpoints_count": 4,
   "files_touched": [
     ".specify/specs/006-agent-messaging/plan.md",
     ".specify/specs/006-agent-messaging/spec.md",
@@ -41,13 +41,20 @@
       "context": "/37/2dd99976e3/3/context.md",
       "content_hash": "/37/2dd99976e3/3/content_hash.txt",
       "prompt": "/37/2dd99976e3/3/prompt.txt"
+    },
+    {
+      "metadata": "/37/2dd99976e3/4/metadata.json",
+      "transcript": "/37/2dd99976e3/4/full.jsonl",
+      "context": "/37/2dd99976e3/4/context.md",
+      "content_hash": "/37/2dd99976e3/4/content_hash.txt",
+      "prompt": "/37/2dd99976e3/4/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 703,
-    "cache_creation_tokens": 7649942,
-    "cache_read_tokens": 42277298,
-    "output_tokens": 175508,
-    "api_call_count": 495
+    "input_tokens": 791,
+    "cache_creation_tokens": 8209151,
+    "cache_read_tokens": 50712621,
+    "output_tokens": 219345,
+    "api_call_count": 573
   }
 }
