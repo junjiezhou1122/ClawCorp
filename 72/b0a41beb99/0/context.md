@@ -28,3 +28,11 @@ Now first implement spec 006!
 
 continue
 
+### Prompt 5
+
+这个chat是他们自己内部的chat！ 每一个chat都可以点开实时查看！
+
+### Prompt 6
+
+你不需要给我开一个可以和他们chat的东西！
+

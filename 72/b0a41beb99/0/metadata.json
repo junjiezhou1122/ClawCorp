@@ -3,29 +3,29 @@
   "checkpoint_id": "72b0a41beb99",
   "session_id": "0cdcba48-6d52-4d05-81b6-47d656101180",
   "strategy": "manual-commit",
-  "created_at": "2026-02-23T02:15:20.970842Z",
+  "created_at": "2026-02-23T02:19:44.412053Z",
   "branch": "main",
-  "checkpoints_count": 1,
+  "checkpoints_count": 2,
   "files_touched": [
     "client/src/App.tsx"
   ],
   "agent": "Claude Code",
-  "turn_id": "e832d1623c55",
+  "turn_id": "80af24633ba7",
   "token_usage": {
-    "input_tokens": 59,
-    "cache_creation_tokens": 343840,
-    "cache_read_tokens": 5558544,
-    "output_tokens": 16466,
-    "api_call_count": 56
+    "input_tokens": 74,
+    "cache_creation_tokens": 347624,
+    "cache_read_tokens": 6933922,
+    "output_tokens": 18913,
+    "api_call_count": 67
   },
   "initial_attribution": {
-    "calculated_at": "2026-02-23T02:15:20.671907Z",
-    "agent_lines": 210,
+    "calculated_at": "2026-02-23T02:19:44.055381Z",
+    "agent_lines": 0,
     "human_added": 0,
     "human_modified": 0,
-    "human_removed": 0,
-    "total_committed": 210,
-    "agent_percentage": 100
+    "human_removed": 31,
+    "total_committed": 0,
+    "agent_percentage": 0
   },
   "transcript_path": ".claude/projects/-Users-junjie-research-ClawCorp/0cdcba48-6d52-4d05-81b6-47d656101180.jsonl"
 }
