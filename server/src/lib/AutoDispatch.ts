@@ -1,4 +1,3 @@
-import Anthropic from '@anthropic-ai/sdk'
 import { readdir, readFile, writeFile, mkdir } from 'fs/promises'
 import { join } from 'path'
 import { broadcast } from './hub'
@@ -54,8 +53,6 @@ async function routeWithLLM(
   executives: Array<{ id: string; title: string; department: string; description: string }>,
   teams: Array<{ id: string; name: string; head: string; members: string[] }>
 ): Promise<RoutingResult> {
-  const anthropic = new Anthropic()
-
   const execSummary = executives
     .map((e) => `- ${e.id}: ${e.title} (${e.department}) — ${e.description}`)
     .join('\n')
@@ -64,13 +61,7 @@ async function routeWithLLM(
     .map((t) => `- ${t.name}: head=${t.head}, ${t.members.length} members`)
     .join('\n')
 
-  const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: 512,
-    messages: [
-      {
-        role: 'user',
-        content: `You are a task router for an AI company. Given a task, pick the best executive to handle it.
+  const prompt = `You are a task router for an AI company. Given a task, pick the best executive to handle it.
 
 Available executives:
 ${execSummary}
@@ -86,20 +77,35 @@ Routing rules:
 Task: "${taskTitle}"
 
 Respond with ONLY valid JSON (no markdown, no explanation):
-{"executive_id": "...", "reasoning": "one sentence why", "suggested_approach": "one sentence how"}`,
-      },
-    ],
+{"executive_id": "...", "reasoning": "one sentence why", "suggested_approach": "one sentence how"}`
+
+  // Spawn claude CLI (same mechanism as all other agents)
+  const proc = Bun.spawn(['claude', '--dangerously-skip-permissions', '-p', prompt, '--output-format', 'text'], {
+    stdout: 'pipe',
+    stderr: 'pipe',
+    env: {
+      ...process.env,
+      CLAUDE_CODE_ENTRYPOINT: undefined as unknown as string,
+    },
   })
 
-  const text = response.content[0].type === 'text' ? response.content[0].text : ''
+  const text = await new Response(proc.stdout).text()
+  const exitCode = await proc.exited
 
-  // Try JSON parse
+  if (exitCode !== 0) {
+    const errText = await new Response(proc.stderr).text()
+    throw new Error(`Claude routing failed (exit ${exitCode}): ${errText.slice(0, 200)}`)
+  }
+
+  // Extract JSON from response (may have surrounding text)
+  const jsonMatch = text.match(/\{[\s\S]*"executive_id"[\s\S]*\}/)
+  const jsonStr = jsonMatch ? jsonMatch[0] : text.trim()
+
   try {
-    const parsed = JSON.parse(text)
+    const parsed = JSON.parse(jsonStr)
     if (parsed.executive_id && executives.some((e) => e.id === parsed.executive_id)) {
       return parsed as RoutingResult
     }
-    // LLM returned an executive that doesn't exist — fallback
     return {
       executive_id: executives[0]?.id ?? 'product-manager',
       reasoning: parsed.reasoning ?? 'Fallback: invalid executive in LLM response',
@@ -116,7 +122,6 @@ Respond with ONLY valid JSON (no markdown, no explanation):
         suggested_approach: 'Auto-routed',
       }
     }
-    // Hard fallback
     return {
       executive_id: 'product-manager',
       reasoning: 'Fallback: could not parse LLM response',
@@ -140,7 +145,7 @@ export async function autoDispatch(
 
   const teams = await loadTeams()
 
-  // 2. LLM routing
+  // 2. LLM routing via Claude CLI
   const routing = await routeWithLLM(taskTitle, executives, teams)
   broadcast('dispatch:routed', {
     taskId,
@@ -184,7 +189,6 @@ Use 'report' tool when done to report results back up the chain.`
   // 5. Spawn the executive agent
   broadcast('dispatch:spawning', { taskId, executiveId: routing.executive_id, missionId })
 
-  // Fire-and-forget — the agent runs asynchronously
   runAgent(routing.executive_id, missionId, prompt, { workspace }).catch((err) => {
     broadcast('dispatch:error', { taskId, message: `Failed to spawn ${routing.executive_id}: ${err.message}` })
   })
