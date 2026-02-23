@@ -3,7 +3,7 @@
   "checkpoint_id": "72b0a41beb99",
   "session_id": "442f141c-908d-431c-b446-8675c95fdcc8",
   "strategy": "manual-commit",
-  "created_at": "2026-02-23T02:15:21.703714Z",
+  "created_at": "2026-02-23T02:19:45.198737Z",
   "branch": "main",
   "checkpoints_count": 1,
   "files_touched": [
@@ -19,13 +19,13 @@
     "api_call_count": 260
   },
   "initial_attribution": {
-    "calculated_at": "2026-02-23T02:15:21.166923Z",
-    "agent_lines": 210,
+    "calculated_at": "2026-02-23T02:19:44.625832Z",
+    "agent_lines": 0,
     "human_added": 0,
     "human_modified": 0,
-    "human_removed": 0,
-    "total_committed": 210,
-    "agent_percentage": 100
+    "human_removed": 31,
+    "total_committed": 0,
+    "agent_percentage": 0
   },
   "transcript_path": ".claude/projects/-Users-junjie-research-ClawCorp/442f141c-908d-431c-b446-8675c95fdcc8.jsonl"
 }
