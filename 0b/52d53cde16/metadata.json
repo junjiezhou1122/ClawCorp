@@ -1,0 +1,29 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "0b52d53cde16",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".gitignore",
+    "server/src/index.ts",
+    "server/src/routes/channels.ts",
+    "server/src/routes/teams.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0b/52d53cde16/0/metadata.json",
+      "transcript": "/0b/52d53cde16/0/full.jsonl",
+      "context": "/0b/52d53cde16/0/context.md",
+      "content_hash": "/0b/52d53cde16/0/content_hash.txt",
+      "prompt": "/0b/52d53cde16/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 57,
+    "cache_creation_tokens": 343214,
+    "cache_read_tokens": 5314117,
+    "output_tokens": 16060,
+    "api_call_count": 54
+  }
+}
