@@ -8,6 +8,7 @@ export const channelRoutes = new Hono()
 
 const CHANNELS_DIR = join(import.meta.dir, '../../../channels')
 const TEAMS_DIR = join(import.meta.dir, '../../../teams')
+const AGENTS_DIR = join(import.meta.dir, '../../../agents')
 
 type ChannelEntry = {
   id: string
@@ -123,6 +124,87 @@ function extractMentions(text: string): string[] {
   return matches ? matches.map((m) => m.slice(1)) : []
 }
 
+// --- Permission: who can an agent message? ---
+
+type AgentProfile = {
+  id: string
+  reports_to?: string
+  subordinates?: string[]
+  team?: string
+}
+
+async function loadProfile(agentId: string): Promise<AgentProfile | null> {
+  try {
+    const raw = await readFile(join(AGENTS_DIR, agentId, 'profile.json'), 'utf-8')
+    return JSON.parse(raw)
+  } catch {
+    return null
+  }
+}
+
+async function getTeammates(agentId: string, teamId: string): Promise<string[]> {
+  if (!teamId) return []
+  try {
+    const team = JSON.parse(await readFile(join(TEAMS_DIR, teamId, 'team.json'), 'utf-8'))
+    const all = [team.head, ...(team.members ?? [])].filter(Boolean)
+    return all.filter((id: string) => id !== agentId)
+  } catch {
+    return []
+  }
+}
+
+async function getAllowedContacts(agentId: string): Promise<{ agents: Set<string>; channels: Set<string> }> {
+  const profile = await loadProfile(agentId)
+  if (!profile) return { agents: new Set(), channels: new Set(['general']) }
+
+  const agents = new Set<string>()
+  const channels = new Set<string>(['general'])
+
+  // Direct supervisor
+  if (profile.reports_to) agents.add(profile.reports_to)
+
+  // Direct subordinates
+  if (profile.subordinates) {
+    for (const sub of profile.subordinates) agents.add(sub)
+  }
+
+  // Teammates (same team)
+  if (profile.team) {
+    channels.add(profile.team) // can post to own team channel
+    const teammates = await getTeammates(agentId, profile.team)
+    for (const t of teammates) agents.add(t)
+  }
+
+  // Directors and executives can message across departments
+  const rank = (profile as Record<string, unknown>).rank as string | undefined
+  if (rank === 'director' || rank === 'executive') {
+    // Can post to any team channel
+    if (existsSync(TEAMS_DIR)) {
+      const dirs = await readdir(TEAMS_DIR, { withFileTypes: true })
+      for (const d of dirs) {
+        if (d.isDirectory()) channels.add(d.name)
+      }
+    }
+    // Can DM other team heads / directors / executives
+    if (existsSync(AGENTS_DIR)) {
+      const agentDirs = await readdir(AGENTS_DIR, { withFileTypes: true })
+      for (const d of agentDirs) {
+        if (!d.isDirectory()) continue
+        try {
+          const other = await loadProfile(d.name)
+          if (!other || other.id === agentId) continue
+          const otherRank = (other as Record<string, unknown>).rank as string | undefined
+          if (otherRank === 'director' || otherRank === 'executive') {
+            agents.add(other.id)
+          }
+        } catch {}
+      }
+    }
+  }
+
+  return { agents, channels }
+}
+
 // --- Init: ensure #general exists ---
 
 export async function initChannels() {
@@ -218,15 +300,24 @@ channelRoutes.post('/send', async (c) => {
     return c.json({ error: 'Message too long (4000 char max)' }, 400)
   }
 
+  // Permission check: who can this agent message?
+  const allowed = await getAllowedContacts(from)
+
   let channelId: string
 
   if (to.startsWith('#')) {
     // Channel message
     channelId = to.slice(1)
+    if (!allowed.channels.has(channelId)) {
+      return c.json({ error: `Not allowed to post to ${to}. You can only message your own team channel and #general. Directors+ can post cross-department.` }, 403)
+    }
     await ensureChannel(channelId, to, channelId === 'general' ? 'org' : 'team')
   } else if (to.startsWith('@')) {
     // Direct message
     const targetAgent = to.slice(1)
+    if (!allowed.agents.has(targetAgent)) {
+      return c.json({ error: `Not allowed to message @${targetAgent}. You can only message your direct supervisor, subordinates, and teammates. Directors+ can message across departments.` }, 403)
+    }
     channelId = makeDmChannelId(from, targetAgent)
     await ensureChannel(channelId, `@${from} / @${targetAgent}`, 'direct', {
       participants: [from, targetAgent].sort(),
