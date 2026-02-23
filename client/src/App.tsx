@@ -54,6 +54,10 @@ type Task = {
   status: string
   created_at: string
   feedback: Array<{ text: string; at: string }>
+  mission_id?: string
+  assigned_to?: string
+  routing_reasoning?: string
+  dispatch_error?: string
 }
 
 type Channel = {
@@ -210,16 +214,9 @@ export default function App() {
   const [showQuickAdd, setShowQuickAdd] = useState(false)
   const [newTaskTitle, setNewTaskTitle] = useState('')
 
-  const [runTarget, setRunTarget] = useState<{
-    missionId: string
-    prompt: string
-    workspace: string
-    sessions: Record<string, string>
-  } | null>(null)
-  const [selectedAgent, setSelectedAgent] = useState('')
-  const [resumeSession, setResumeSession] = useState(false)
-
   const [showSmartHire, setShowSmartHire] = useState(false)
+
+  const [newTitle, setNewTitle] = useState('')
   const [smartHireDesc, setSmartHireDesc] = useState('')
   const [hiringInProgress, setHiringInProgress] = useState(false)
 
@@ -404,6 +401,20 @@ export default function App() {
         return [...p, { ...ch, messageCount: 0, lastActivity: ch.lastActivity ?? new Date().toISOString() }]
       })
     }
+
+    // Dispatch events
+    if (event === 'dispatch:start') {
+      appendLog('dispatch', '', `[dispatch] Routing: "${d.title}"`, 'system')
+    }
+    if (event === 'dispatch:routed') {
+      appendLog('dispatch', '', `[dispatch] → ${d.executiveId}: ${d.reasoning}`, 'system')
+    }
+    if (event === 'dispatch:spawning') {
+      appendLog('dispatch', '', `[dispatch] Spawning ${d.executiveId}...`, 'system')
+    }
+    if (event === 'dispatch:error') {
+      appendLog('dispatch', '', `[dispatch] Error: ${d.message}`, 'error')
+    }
   })
 
   async function createMission() {
@@ -420,32 +431,12 @@ export default function App() {
     return true
   }
 
-  async function startRun() {
-    if (!runTarget || !selectedAgent) return
-    const sessionId = resumeSession ? runTarget.sessions[selectedAgent] : undefined
-
-    await fetch('/api/run', {
+  async function dispatchTask(task: Task) {
+    await fetch(`/api/tasks/${task.id}/dispatch`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        agentId: selectedAgent,
-        missionId: runTarget.missionId,
-        prompt: runTarget.prompt,
-        workspace: runTarget.workspace || undefined,
-        resume: resumeSession && !sessionId,
-        sessionId,
-      }),
+      body: JSON.stringify({}),
     })
-
-    setMissions((p) =>
-      p.map((m) =>
-        m.id === runTarget.missionId ? { ...m, current_stage: 'development', assignee: selectedAgent } : m
-      )
-    )
-
-    setRunTarget(null)
-    setSelectedAgent('')
-    setResumeSession(false)
   }
 
   async function startSmartHire() {
@@ -548,25 +539,6 @@ export default function App() {
     )
     setPushBackTarget(null)
     setPushBackText('')
-  }
-
-  async function runTask(task: Task) {
-    // Create a mission from this task
-    const res = await fetch('/api/missions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: task.title, type: 'engineering', workspace: null }),
-    })
-    const mission = await res.json()
-    setMissions((p) => [...p, mission])
-
-    // Open the run modal pre-filled with task info
-    setRunTarget({
-      missionId: mission.id,
-      prompt: task.title,
-      workspace: '',
-      sessions: {},
-    })
   }
 
   async function selectChannel(channelId: string) {
@@ -973,13 +945,29 @@ export default function App() {
                                   </div>
                                 )}
 
+                                {t.assigned_to && (
+                                  <div className="mt-2 flex items-center gap-1.5">
+                                    <span className="h-2 w-2 rounded-full bg-[#35bf68] animate-dot" />
+                                    <span className="text-xs font-semibold text-[#2f7a41]">{t.assigned_to}</span>
+                                    {t.routing_reasoning && (
+                                      <span className="text-[10px] text-[#8a9e91]" title={t.routing_reasoning}>— {t.routing_reasoning}</span>
+                                    )}
+                                  </div>
+                                )}
+
+                                {t.dispatch_error && (
+                                  <p className="mt-2 rounded-lg bg-[#fff0f0] px-2 py-1.5 text-xs text-[#9d3d3d]">
+                                    Dispatch failed: {t.dispatch_error}
+                                  </p>
+                                )}
+
                                 <div className="mt-2 flex gap-1.5">
-                                  {col !== 'done' && (
+                                  {col !== 'done' && !t.mission_id && (
                                     <button
-                                      onClick={() => runTask(t)}
+                                      onClick={() => dispatchTask(t)}
                                       className="btn-base btn-primary flex-1 py-1.5 text-xs"
                                     >
-                                      Run
+                                      Dispatch
                                     </button>
                                   )}
                                   {col === 'review' && (
@@ -1148,88 +1136,6 @@ export default function App() {
           </aside>
         </div>
       </div>
-
-      {runTarget && (
-        <div className="modal-mask fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="panel modal-card w-full max-w-xl p-5 lg:p-6">
-            <h3 className="font-display text-xl text-[#224232]">Run Mission</h3>
-            <p className="mt-1 font-mono text-xs text-[#6f877b]">{runTarget.missionId}</p>
-
-            <div className="mt-4 space-y-3">
-              <label className="block text-xs font-semibold text-[#668074]">
-                Workspace
-                <input
-                  value={runTarget.workspace}
-                  onChange={(e) => setRunTarget({ ...runTarget, workspace: e.target.value })}
-                  placeholder="/path/to/project"
-                  className="input-base mt-1 font-mono text-sm"
-                />
-              </label>
-
-              <label className="block text-xs font-semibold text-[#668074]">
-                Agent
-                <select
-                  value={selectedAgent}
-                  onChange={(e) => {
-                    setSelectedAgent(e.target.value)
-                    setResumeSession(false)
-                  }}
-                  className="select-base mt-1"
-                >
-                  <option value="">Select agent...</option>
-                  {agents.map((a) => (
-                    <option key={a.id} value={a.id} disabled={a.status === 'running'}>
-                      {a.title}
-                      {a.status === 'running' ? ' (busy)' : ''}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              {selectedAgent && (
-                <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-[#cce7d5] bg-[#f1fff4] p-2 text-xs text-[#466858]">
-                  <input
-                    type="checkbox"
-                    checked={resumeSession}
-                    onChange={(e) => setResumeSession(e.target.checked)}
-                    className="accent-[#35b562]"
-                  />
-                  Resume session
-                  {runTarget.sessions[selectedAgent]
-                    ? ` (${runTarget.sessions[selectedAgent].slice(0, 8)}...)`
-                    : ' (continue latest)'}
-                </label>
-              )}
-
-              <label className="block text-xs font-semibold text-[#668074]">
-                Prompt
-                <textarea
-                  value={runTarget.prompt}
-                  onChange={(e) => setRunTarget({ ...runTarget, prompt: e.target.value })}
-                  rows={4}
-                  className="textarea-base mt-1 resize-none"
-                />
-              </label>
-            </div>
-
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                onClick={() => {
-                  setRunTarget(null)
-                  setSelectedAgent('')
-                  setResumeSession(false)
-                }}
-                className="btn-base btn-secondary"
-              >
-                Cancel
-              </button>
-              <button onClick={startRun} disabled={!selectedAgent} className="btn-base btn-primary">
-                Run
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {showSmartHire && (
         <div className="modal-mask fixed inset-0 z-50 flex items-center justify-center p-4">
