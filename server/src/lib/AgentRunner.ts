@@ -36,7 +36,7 @@ export async function runAgent(
   const profilePath = join(AGENTS_DIR, agentId, 'profile.json')
   const profile = JSON.parse(await readFile(profilePath, 'utf-8'))
 
-  // Resolve workspace
+  // Resolve workspace — default to mission artifacts dir for isolation
   let workspace = options.workspace
   if (!workspace) {
     try {
@@ -48,7 +48,15 @@ export async function runAgent(
   if (!workspace && profile.default_workspace) {
     workspace = profile.default_workspace.replace('~', process.env.HOME ?? '')
   }
-  const cwd = workspace ?? process.cwd()
+  if (!workspace) {
+    // Fallback: use mission artifacts dir as isolated workspace
+    workspace = join(MISSIONS_DIR, missionId, 'artifacts')
+    await mkdir(workspace, { recursive: true })
+  }
+  const cwd = workspace
+
+  // Inject CLAUDE.md with role-based rules
+  await injectClaudeMd(cwd, agentId, profile)
 
   // Inject MCP config into workspace
   await injectMcpConfig(cwd, agentId, missionId)
@@ -175,6 +183,54 @@ export async function runAgent(
 
     broadcast('agent:done', { agentId, missionId, exitCode: code, sessionId })
   })
+}
+
+async function injectClaudeMd(cwd: string, agentId: string, profile: Record<string, unknown>) {
+  try {
+    const rank = (profile.rank as string) ?? 'member'
+    const subordinates = (profile.subordinates as string[]) ?? []
+
+    let rules: string
+
+    if ((rank === 'executive' || rank === 'director') && subordinates.length > 0) {
+      rules = `# CLAUDE.md — Workspace Rules for ${agentId}
+
+## ROLE: ${rank.toUpperCase()} (Manager)
+
+You are a **${rank}**. Your subordinates: ${subordinates.join(', ')}
+
+## ABSOLUTE RULES — VIOLATION = MISSION FAILURE
+
+1. **NEVER write code, HTML, CSS, JS, or any implementation files.** That is your subordinates' job.
+2. **You MUST call the 'delegate' MCP tool** to assign implementation work to your subordinates.
+3. **You MUST NOT call 'report' until you have called 'delegate' at least once.**
+4. You may write ONE planning/strategy document (PRD, brief, etc). Everything else must be delegated.
+5. If you find yourself writing \`<script>\`, \`function\`, \`import\`, \`class\`, or any code — STOP. You are violating your role. Delegate instead.
+
+## WORKFLOW
+1. Analyze the task
+2. Write a brief plan/PRD (optional, 1 file max)
+3. Call \`delegate\` for each subordinate with clear task descriptions
+4. Call \`report\` to summarize what you delegated
+`
+    } else {
+      rules = `# CLAUDE.md — Workspace Rules for ${agentId}
+
+## ROLE: ${rank.toUpperCase()} (Individual Contributor)
+
+You are an individual contributor. Do the work yourself.
+
+## RULES
+1. NEVER ask clarifying questions. Make reasonable assumptions.
+2. Save ALL output files to this directory.
+3. Call 'report' when your work is complete.
+`
+    }
+
+    await writeFile(join(cwd, 'CLAUDE.md'), rules)
+  } catch (err) {
+    console.error('[AgentRunner] Failed to inject CLAUDE.md:', err)
+  }
 }
 
 async function injectMcpConfig(cwd: string, agentId: string, missionId: string) {

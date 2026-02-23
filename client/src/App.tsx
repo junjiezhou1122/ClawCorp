@@ -87,6 +87,14 @@ type LogLine = {
   kind: 'output' | 'error' | 'system'
 }
 
+type TaskDetail = {
+  task: Task
+  missions: Mission[]
+  agents: Record<string, Agent>
+  artifacts: Record<string, string[]>
+  messages: Record<string, unknown[]>
+}
+
 const STAGES = ['backlog', 'analysis', 'design', 'development', 'testing', 'done']
 
 const STAGE_LABELS: Record<string, string> = {
@@ -226,7 +234,14 @@ export default function App() {
   const [pushBackTarget, setPushBackTarget] = useState<Task | null>(null)
   const [pushBackText, setPushBackText] = useState('')
 
-  const logScrollRef = useRef<HTMLDivElement>(null)
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null)
+  const [taskDetail, setTaskDetail] = useState<TaskDetail | null>(null)
+  const [taskDetailLoading, setTaskDetailLoading] = useState(false)
+  const [taskMissionIds, setTaskMissionIds] = useState<Set<string>>(new Set())
+  const [logFilterAgent, setLogFilterAgent] = useState<string | null>(null)
+
+  const detailLogScrollRef = useRef<HTMLDivElement>(null)
+  const selectedTaskRef = useRef<Task | null>(null)
   const chatScrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -251,9 +266,26 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    if (!logScrollRef.current) return
-    logScrollRef.current.scrollTop = logScrollRef.current.scrollHeight
+    if (!detailLogScrollRef.current) return
+    detailLogScrollRef.current.scrollTop = detailLogScrollRef.current.scrollHeight
   }, [logs])
+
+  useEffect(() => {
+    selectedTaskRef.current = selectedTask
+  }, [selectedTask])
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        setSelectedTask(null)
+        setTaskDetail(null)
+        setTaskMissionIds(new Set())
+        setLogFilterAgent(null)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   useEffect(() => {
     if (!chatScrollRef.current) return
@@ -271,6 +303,19 @@ export default function App() {
     if (event === 'agent:start') {
       setAgents((p) => p.map((a) => (a.id === d.agentId ? { ...a, status: 'running' } : a)))
       appendLog(d.agentId, d.missionId, `> started in ${d.workspace ?? 'cwd'}`, 'system')
+      // Auto-discover delegated sub-missions via missionId prefix matching
+      if (d.missionId) {
+        setTaskMissionIds((prev) => {
+          for (const mid of prev) {
+            if (d.missionId.startsWith(mid)) {
+              const next = new Set(prev)
+              next.add(d.missionId)
+              return next
+            }
+          }
+          return prev
+        })
+      }
     }
 
     if (event === 'agent:output') appendLog(d.agentId, d.missionId, d.text, 'output')
@@ -310,17 +355,42 @@ export default function App() {
 
     if (event === 'mission:updated') {
       const updated = data as unknown as Mission
-      setMissions((p) => p.map((m) => (m.id === updated.id ? updated : m)))
+      setMissions((p) => {
+        const exists = p.some((m) => m.id === updated.id)
+        return exists ? p.map((m) => (m.id === updated.id ? updated : m)) : [...p, updated]
+      })
+      // If new mission's parent is in our detail tree, expand the set
+      if (updated.parent_mission) {
+        setTaskMissionIds((prev) => {
+          if (prev.has(updated.parent_mission!)) {
+            const next = new Set(prev)
+            next.add(updated.id)
+            return next
+          }
+          return prev
+        })
+      }
     }
 
     if (event === 'task:created') {
       const task = data as unknown as Task
-      setTasks((p) => [...p, task])
+      setTasks((p) => p.some((t) => t.id === task.id) ? p : [...p, task])
     }
 
     if (event === 'task:updated') {
       const updated = data as unknown as Task
       setTasks((p) => p.map((t) => (t.id === updated.id ? updated : t)))
+      // Sync selectedTask and auto re-fetch detail when mission_id first appears
+      const sel = selectedTaskRef.current
+      if (sel && sel.id === updated.id) {
+        setSelectedTask(updated)
+        if (updated.mission_id && !sel.mission_id) {
+          fetch(`/api/tasks/${updated.id}/detail`).then(r => r.json()).then((detail: TaskDetail) => {
+            setTaskDetail(detail)
+            setTaskMissionIds(new Set(detail.missions.map((m: Mission) => m.id)))
+          }).catch(console.error)
+        }
+      }
     }
 
     if (event === 'task:deleted') {
@@ -546,6 +616,29 @@ export default function App() {
     setChannelMessages(msgs)
   }
 
+  async function openTaskDetail(task: Task) {
+    setSelectedTask(task)
+    setLogFilterAgent(null)
+    setTaskDetailLoading(true)
+    try {
+      const res = await fetch(`/api/tasks/${task.id}/detail`)
+      const detail: TaskDetail = await res.json()
+      setTaskDetail(detail)
+      setTaskMissionIds(new Set(detail.missions.map((m: Mission) => m.id)))
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setTaskDetailLoading(false)
+    }
+  }
+
+  function closeTaskDetail() {
+    setSelectedTask(null)
+    setTaskDetail(null)
+    setTaskMissionIds(new Set())
+    setLogFilterAgent(null)
+  }
+
   const missionsByStage = STAGES.reduce((acc, stage) => {
     acc[stage] = missions.filter((m) => m.current_stage === stage && !m.parent_mission)
     return acc
@@ -696,7 +789,7 @@ export default function App() {
           </div>
         </header>
 
-        <div className="flex min-h-0 flex-1 flex-col xl:flex-row">
+        <div className="flex min-h-0 flex-1 flex-col">
           <main className="min-h-0 flex-1 overflow-y-auto p-2 lg:p-3">
             {tab === 'inbox' && (
               <section className="space-y-3 pt-1">
@@ -914,7 +1007,11 @@ export default function App() {
                                 draggable
                                 onDragStart={() => setDragTask(t.id)}
                                 onDragEnd={() => setDragTask(null)}
-                                className="mission-card animate-rise cursor-grab p-3 active:cursor-grabbing"
+                                onClick={(e) => {
+                                  if ((e.target as HTMLElement).closest('button')) return
+                                  openTaskDetail(t)
+                                }}
+                                className="mission-card animate-rise cursor-pointer p-3 active:cursor-grabbing"
                                 style={{ animationDelay: `${taskIndex * 0.02}s` }}
                               >
                                 <p className="text-sm font-bold leading-snug text-[#24342b]">{t.title}</p>
@@ -1106,34 +1203,236 @@ export default function App() {
               </div>
             )}
           </main>
-
-          <aside className="flex min-h-[220px] flex-col border-t border-[var(--line-soft)] bg-white/60 xl:w-[260px] xl:shrink-0 xl:border-l xl:border-t-0">
-            <div className="flex items-center justify-between border-b border-[var(--line-soft)] px-4 py-3">
-              <div className="section-label">Live Log</div>
-              <button onClick={() => setLogs([])} className="text-xs font-bold text-[#688173] hover:text-[#365945]">
-                clear
-              </button>
-            </div>
-
-            <div ref={logScrollRef} className="min-h-0 flex-1 space-y-1 overflow-y-auto p-3 text-xs">
-              {logs.length === 0 && <p className="mt-6 text-center text-[#738d80]">Run an agent to stream output.</p>}
-
-              {logs.map((line) => (
-                <div
-                  key={line.id}
-                  className={`whitespace-pre-wrap break-all font-mono leading-relaxed ${
-                    line.kind === 'system' ? 'log-line-system' : line.kind === 'error' ? 'log-line-error' : 'log-line-output'
-                  }`}
-                >
-                  {line.kind === 'system' && <span className="text-[#819b8d]">[{line.agentId}] </span>}
-                  {line.text}
-                </div>
-              ))}
-
-            </div>
-          </aside>
         </div>
       </div>
+
+      {selectedTask && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-[#f4f8f5]">
+          {/* Header */}
+          <header className="flex items-center gap-3 border-b border-[var(--line-soft)] bg-white px-4 py-3">
+            <button onClick={closeTaskDetail} className="btn-base btn-secondary py-1.5 text-xs">
+              &larr; Back
+            </button>
+            <div className="flex flex-1 flex-wrap items-center gap-2">
+              <h2 className="font-display text-lg text-[#1e3127]">{selectedTask.title}</h2>
+              <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-extrabold uppercase tracking-[0.06em] ${TASK_THEME[selectedTask.status]?.badge ?? 'bg-[#e7f2ea] text-[#446658]'}`}>
+                {TASK_LABELS[selectedTask.status] ?? selectedTask.status}
+              </span>
+              {selectedTask.assigned_to && (
+                <span className="rounded-full bg-[#d2f0d8] px-2.5 py-0.5 text-[11px] font-semibold text-[#25683a]">
+                  {selectedTask.assigned_to}
+                </span>
+              )}
+            </div>
+            <div className="flex gap-1.5">
+              {selectedTask.status !== 'done' && !selectedTask.mission_id && (
+                <button onClick={() => dispatchTask(selectedTask)} className="btn-base btn-primary py-1.5 text-xs">
+                  Dispatch
+                </button>
+              )}
+              {selectedTask.status === 'review' && (
+                <button onClick={() => { setPushBackTarget(selectedTask); closeTaskDetail() }} className="btn-base btn-secondary py-1.5 text-xs">
+                  Push Back
+                </button>
+              )}
+              <button onClick={() => { deleteTask(selectedTask.id); closeTaskDetail() }} className="btn-base btn-danger py-1.5 text-xs">
+                Delete
+              </button>
+            </div>
+          </header>
+
+          {/* Body: sidebar + main log */}
+          <div className="flex min-h-0 flex-1">
+            {/* Left Sidebar */}
+            <aside className="w-72 shrink-0 overflow-y-auto border-r border-[var(--line-soft)] bg-white p-4 space-y-4">
+              {/* Routing Reasoning */}
+              {selectedTask.routing_reasoning && (
+                <div>
+                  <div className="section-label mb-1">Routing</div>
+                  <p className="rounded-lg bg-[#fdf8ec] border border-[#e9dcaa] px-3 py-2 text-xs text-[#5a4b1e] leading-relaxed">
+                    {selectedTask.routing_reasoning}
+                  </p>
+                </div>
+              )}
+
+              {/* Agent Tree */}
+              <div>
+                <div className="section-label mb-1">Agent Tree</div>
+                {taskDetailLoading ? (
+                  <p className="text-xs text-[#8a9e91]">Loading...</p>
+                ) : !taskDetail || taskDetail.missions.length === 0 ? (
+                  <p className="text-xs text-[#8a9e91]">No missions yet</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {taskDetail.missions.map((m) => {
+                      const agent = m.assignee ? taskDetail.agents[m.assignee] : null
+                      const agentObj = agents.find(a => a.id === m.assignee)
+                      const isRunning = agentObj?.status === 'running'
+                      return (
+                        <div key={m.id} className={`rounded-lg border px-2.5 py-2 ${isRunning ? 'border-[#7fd4a0] bg-[#f0fdf4]' : 'border-[#d8e6dc] bg-white'}`}>
+                          <div className="flex items-center gap-1.5">
+                            <span className={`h-2 w-2 rounded-full ${isRunning ? 'bg-[#35bf68] animate-dot' : m.status === 'done' ? 'bg-[#abc8b4]' : 'bg-[#d4aa4f]'}`} />
+                            <span className="text-xs font-semibold text-[#26372d] truncate">{m.assignee ?? 'unassigned'}</span>
+                          </div>
+                          <p className="mt-0.5 text-[10px] text-[#6f887b] truncate">{m.title}</p>
+                          {m.parent_mission && (
+                            <p className="mt-0.5 font-mono text-[9px] text-[#a0b4a8]">sub of {m.parent_mission.slice(0, 16)}</p>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Artifacts */}
+              <div>
+                <div className="section-label mb-1">Artifacts</div>
+                {taskDetail && Object.values(taskDetail.artifacts).flat().length > 0 ? (
+                  <div className="space-y-1 font-mono text-[11px] text-[#6b8277]">
+                    {Object.entries(taskDetail.artifacts).map(([mid, files]) =>
+                      files.map((f) => (
+                        <div key={`${mid}/${f}`} className="rounded bg-white/70 px-2 py-1 border border-[#e4efe7]">{f}</div>
+                      ))
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-xs text-[#8a9e91]">No artifacts yet</p>
+                )}
+              </div>
+
+              {/* Communications */}
+              <div>
+                <div className="section-label mb-1">Communications</div>
+                {taskDetail && Object.values(taskDetail.messages).flat().length > 0 ? (
+                  <div className="space-y-1.5">
+                    {Object.values(taskDetail.messages).flat().map((msg: any, i) => (
+                      <div key={msg.id ?? i} className={`rounded-lg border px-2.5 py-2 text-xs ${msg.type === 'escalate' ? 'border-[#f0c593] bg-[#fff6ea]' : 'border-[#bee0c4] bg-[#f2fcf4]'}`}>
+                        <div className="flex items-center gap-1 text-[10px]">
+                          <span className="font-semibold text-[#305e42]">{msg.from}</span>
+                          <span className="text-[#70897c]">&rarr; {msg.to}</span>
+                        </div>
+                        <p className="mt-0.5 text-[#2b3a31]">{msg.type === 'report' ? msg.summary : msg.question}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-[#8a9e91]">No messages yet</p>
+                )}
+              </div>
+
+              {/* Feedback History */}
+              {selectedTask.feedback.length > 0 && (
+                <div>
+                  <div className="section-label mb-1">Feedback</div>
+                  <div className="space-y-1">
+                    {selectedTask.feedback.map((fb, i) => (
+                      <div key={i} className="rounded-lg bg-[#fff6e9] border border-[#f0d4bf] px-2.5 py-1.5 text-xs text-[#7a5c2e]">
+                        {fb.text}
+                        <span className="ml-1 text-[10px] text-[#a8a08a]">{formatMessageTime(fb.at)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </aside>
+
+            {/* Main: Live Log */}
+            <div className="flex min-h-0 flex-1 flex-col">
+              {/* Agent filter chips */}
+              {(() => {
+                const detailAgentIds = [...new Set(
+                  logs
+                    .filter(l => {
+                      if (l.agentId === 'dispatch') return true
+                      if (!l.missionId) return false
+                      if (taskMissionIds.has(l.missionId)) return true
+                      for (const mid of taskMissionIds) {
+                        if (l.missionId.startsWith(mid)) return true
+                      }
+                      return false
+                    })
+                    .map(l => l.agentId)
+                )]
+                if (detailAgentIds.length === 0) return null
+                return (
+                  <div className="flex flex-wrap items-center gap-1.5 border-b border-[var(--line-soft)] bg-white px-4 py-2">
+                    <span className="text-[11px] font-semibold text-[#6f887b]">Filter:</span>
+                    {logFilterAgent && (
+                      <button onClick={() => setLogFilterAgent(null)} className="rounded-full bg-[#e7f2ea] px-2 py-0.5 text-[11px] font-semibold text-[#446658] hover:bg-[#d2e8d8]">
+                        Clear
+                      </button>
+                    )}
+                    {detailAgentIds.map(aid => (
+                      <button
+                        key={aid}
+                        onClick={() => setLogFilterAgent(logFilterAgent === aid ? null : aid)}
+                        className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition-colors ${
+                          logFilterAgent === aid
+                            ? 'bg-[#2f7a41] text-white'
+                            : 'bg-[#e7f2ea] text-[#446658] hover:bg-[#d2e8d8]'
+                        }`}
+                      >
+                        {aid}
+                      </button>
+                    ))}
+                  </div>
+                )
+              })()}
+
+              {/* Filtered log lines */}
+              <div ref={detailLogScrollRef} className="min-h-0 flex-1 overflow-y-auto p-4 space-y-1 text-xs">
+                {(() => {
+                  const filtered = logs.filter(l => {
+                    // Mission match
+                    let missionMatch = l.agentId === 'dispatch'
+                    if (!missionMatch && l.missionId) {
+                      if (taskMissionIds.has(l.missionId)) missionMatch = true
+                      else {
+                        for (const mid of taskMissionIds) {
+                          if (l.missionId.startsWith(mid)) { missionMatch = true; break }
+                        }
+                      }
+                    }
+                    if (!missionMatch) return false
+                    // Agent filter
+                    if (logFilterAgent && l.agentId !== logFilterAgent) return false
+                    return true
+                  })
+
+                  if (!selectedTask.mission_id && filtered.length === 0) {
+                    return (
+                      <div className="flex flex-1 items-center justify-center h-full">
+                        <p className="text-sm text-[#8a9e91]">Dispatch the task to start tracking progress.</p>
+                      </div>
+                    )
+                  }
+
+                  if (filtered.length === 0) {
+                    return (
+                      <div className="flex flex-1 items-center justify-center h-full">
+                        <p className="text-sm text-[#8a9e91]">Waiting for agent output...</p>
+                      </div>
+                    )
+                  }
+
+                  return filtered.map(line => (
+                    <div
+                      key={line.id}
+                      className={`whitespace-pre-wrap break-all font-mono leading-relaxed ${
+                        line.kind === 'system' ? 'log-line-system' : line.kind === 'error' ? 'log-line-error' : 'log-line-output'
+                      }`}
+                    >
+                      {line.kind === 'system' && <span className="text-[#819b8d]">[{line.agentId}] </span>}
+                      {line.text}
+                    </div>
+                  ))
+                })()}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showSmartHire && (
         <div className="modal-mask fixed inset-0 z-50 flex items-center justify-center p-4">

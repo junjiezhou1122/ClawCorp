@@ -18,6 +18,9 @@ const AGENT_ID = process.env.CLAWCORP_AGENT_ID ?? 'unknown'
 const MISSION_ID = process.env.CLAWCORP_MISSION_ID ?? 'unknown'
 const AGENTS_DIR = process.env.CLAWCORP_AGENTS_DIR ?? join(import.meta.dir, '../../../agents')
 
+// Track whether delegate was called in this session
+let delegateCalled = false
+
 async function api(method: string, path: string, body?: unknown) {
   const res = await fetch(`${BASE_URL}${path}`, {
     method,
@@ -178,12 +181,29 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           task: a.task,
           workspace: a.workspace,
         })
+        delegateCalled = true
         return {
           content: [{ type: 'text', text: `Delegated to ${a.agent_id}. Sub-mission: ${result.subMissionId}. Waiting for completion...` }],
         }
       }
 
       case 'report': {
+        // Mechanical enforcement: executives/directors must delegate before reporting
+        if (!delegateCalled) {
+          let callerProfile: Record<string, unknown> = {}
+          try {
+            callerProfile = JSON.parse(await readFile(join(AGENTS_DIR, AGENT_ID, 'profile.json'), 'utf-8'))
+          } catch {}
+          const rank = (callerProfile.rank as string) ?? 'member'
+          const subs = (callerProfile.subordinates as string[]) ?? []
+          if ((rank === 'executive' || rank === 'director') && subs.length > 0) {
+            return {
+              content: [{ type: 'text', text: `BLOCKED: You are a ${rank} with subordinates (${subs.join(', ')}). You MUST call 'delegate' at least once before reporting. Delegate implementation work to your subordinates first, then call report again.` }],
+              isError: true,
+            }
+          }
+        }
+
         await api('POST', '/api/messages', {
           from: AGENT_ID,
           missionId: MISSION_ID,

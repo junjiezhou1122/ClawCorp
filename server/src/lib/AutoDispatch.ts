@@ -176,19 +176,31 @@ export async function autoDispatch(
   await writeFile(join(missionDir, 'state.json'), JSON.stringify(missionState, null, 2))
   broadcast('mission:updated', missionState)
 
-  // 4. Build prompt for the executive
+  // 4. Build prompt for the executive — load their subordinates for explicit listing
+  let subordinatesList = ''
+  try {
+    const execProfile = JSON.parse(await readFile(join(AGENTS_DIR, routing.executive_id, 'profile.json'), 'utf-8'))
+    const subs = execProfile.subordinates ?? []
+    if (subs.length > 0) {
+      subordinatesList = `\nYour subordinates (use 'delegate' tool to assign them work): ${subs.join(', ')}`
+    }
+  } catch {}
+
   const prompt = `The Chairman has assigned this task to you via auto-dispatch.
 
 Task: ${taskTitle}
 Routing reasoning: ${routing.reasoning}
 Suggested approach: ${routing.suggested_approach}
+${subordinatesList}
 
-IMPORTANT: You are an EXECUTIVE. Your job is to PLAN and DELEGATE, not to implement.
-- Break the task into sub-tasks
-- Use 'delegate' to assign each sub-task to the appropriate subordinate
-- Do NOT write code, designs, or artifacts yourself — that is your team's job
-- You may write a brief plan/PRD before delegating, but implementation MUST be delegated
-- Use 'report' when all sub-tasks have been delegated and you have a summary of the plan`
+CRITICAL RULES — VIOLATION = MISSION FAILURE:
+1. You are an EXECUTIVE. You MUST delegate implementation to subordinates using the 'delegate' MCP tool.
+2. You may write a brief PRD or plan (1 file max), but ALL implementation (code, architecture docs, designs) MUST be delegated.
+3. If you write code, HTML, CSS, or any implementation artifact yourself, the mission is a FAILURE.
+4. Call the 'delegate' tool at least once before calling 'report'. If you report without delegating, the mission is a FAILURE.
+5. After delegating, call 'report' to summarize what you delegated and to whom.
+
+WORKFLOW: Write brief plan/PRD → delegate to subordinates → report to Chairman.`
 
   // 5. Spawn the executive agent
   broadcast('dispatch:spawning', { taskId, executiveId: routing.executive_id, missionId })
