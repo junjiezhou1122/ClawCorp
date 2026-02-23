@@ -3,6 +3,7 @@ import { readdir, readFile, writeFile, mkdir, rm } from 'fs/promises'
 import { join } from 'path'
 import { existsSync } from 'fs'
 import { broadcast } from '../lib/hub'
+import { ensureChannel } from './channels'
 
 export const teamRoutes = new Hono()
 
@@ -69,6 +70,8 @@ teamRoutes.post('/', async (c) => {
   }
 
   await writeTeam(id, team)
+  // Auto-create team channel
+  await ensureChannel(id, `#${id}`, 'team', { teamId: id })
   broadcast('team:created', team)
   return c.json(team, 201)
 })

@@ -48,5 +48,6 @@ next-env.d.ts
 missions/
 tasks/
 teams/
+channels/
 archive/
 **/.claude/settings.json

@@ -10,6 +10,8 @@ import { delegateRoutes } from './routes/delegate'
 import { hireRoutes } from './routes/hire'
 import { taskRoutes } from './routes/tasks'
 import { teamRoutes } from './routes/teams'
+import { channelRoutes } from './routes/channels'
+import { initChannels } from './routes/channels'
 
 const app = new Hono()
 
@@ -24,6 +26,7 @@ app.route('/api/delegate', delegateRoutes)
 app.route('/api/hire', hireRoutes)
 app.route('/api/tasks', taskRoutes)
 app.route('/api/teams', teamRoutes)
+app.route('/api/channels', channelRoutes)
 
 app.get('/health', (c) => c.json({ status: 'ok', time: new Date().toISOString() }))
 
@@ -45,3 +48,6 @@ const server = Bun.serve({
 })
 
 console.log(`ClawCorp server → http://localhost:${server.port}`)
+
+// Initialize default channels on startup
+initChannels().catch((err) => console.error('[channels] init failed:', err))
