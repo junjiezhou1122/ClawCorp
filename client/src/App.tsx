@@ -215,8 +215,6 @@ export default function App() {
   const [newTaskTitle, setNewTaskTitle] = useState('')
 
   const [showSmartHire, setShowSmartHire] = useState(false)
-
-  const [newTitle, setNewTitle] = useState('')
   const [smartHireDesc, setSmartHireDesc] = useState('')
   const [hiringInProgress, setHiringInProgress] = useState(false)
 
