@@ -95,6 +95,30 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
     {
+      name: 'send_message',
+      description: 'Send a message to a channel (#channel-name) or another agent (@agent-id). Non-blocking, fire-and-forget. Use this for FYIs, questions, coordination — anything that is not an escalation, report, or delegation.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          to: { type: 'string', description: 'Destination: "#channel-name" for a channel or "@agent-id" for a direct message' },
+          text: { type: 'string', description: 'Message content (markdown ok, max 4000 chars)' },
+          reply_to: { type: 'string', description: 'Optional message ID to reply to (creates a thread)' },
+        },
+        required: ['to', 'text'],
+      },
+    },
+    {
+      name: 'read_messages',
+      description: 'Read recent messages. Specify a channel to read that channel, or omit to get all unread messages mentioning you.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          channel: { type: 'string', description: 'Channel to read: "#engineering" or "@agent-id" for DMs. Omit to get all unread messages mentioning you.' },
+          limit: { type: 'number', description: 'Max messages to return (default 20)' },
+        },
+      },
+    },
+    {
       name: 'cross_team_delegate',
       description: 'Delegate a task to another department\'s head with full context. Only callable by agents with rank "director" or "executive". Sends a structured context packet so the receiving team knows what to do, why, and what is already known.',
       inputSchema: {
@@ -184,6 +208,55 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const timestamp = new Date().toISOString()
         await writeFile(memPath, `${existing}\n\n## ${timestamp}\n${a.content}`)
         return { content: [{ type: 'text', text: 'Memory saved.' }] }
+      }
+
+      case 'send_message': {
+        const result = await api('POST', '/api/channels/send', {
+          from: AGENT_ID,
+          to: a.to,
+          text: a.text,
+          replyTo: a.reply_to,
+        })
+        if (result.error) {
+          return { content: [{ type: 'text', text: `Error: ${result.error}` }], isError: true }
+        }
+        return { content: [{ type: 'text', text: `Message sent (${result.messageId})` }] }
+      }
+
+      case 'read_messages': {
+        const limit = (a.limit as number) ?? 20
+        const channel = a.channel as string | undefined
+
+        if (channel) {
+          // Read specific channel
+          let channelId: string
+          if (channel.startsWith('#')) {
+            channelId = channel.slice(1)
+          } else if (channel.startsWith('@')) {
+            const targetAgent = channel.slice(1)
+            channelId = `dm-${[AGENT_ID, targetAgent].sort().join('-')}`
+          } else {
+            channelId = channel
+          }
+          const messages = await api('GET', `/api/channels/${channelId}/messages?limit=${limit}`)
+          if (!Array.isArray(messages) || messages.length === 0) {
+            return { content: [{ type: 'text', text: 'No messages in this channel.' }] }
+          }
+          const formatted = messages.map((m: Record<string, string>) =>
+            `[${m.ts}] ${m.from}: ${m.text}${m.replyTo ? ` (reply to ${m.replyTo})` : ''}`
+          ).join('\n')
+          return { content: [{ type: 'text', text: formatted }] }
+        }
+
+        // No channel specified — get unread messages mentioning this agent
+        const unread = await api('GET', `/api/channels/unread/${AGENT_ID}`)
+        if (!Array.isArray(unread) || unread.length === 0) {
+          return { content: [{ type: 'text', text: 'No unread messages.' }] }
+        }
+        const formatted = unread.slice(0, limit).map((m: Record<string, string>) =>
+          `[${m.channel}] [${m.ts}] ${m.from}: ${m.text}`
+        ).join('\n')
+        return { content: [{ type: 'text', text: `${unread.length} unread message(s):\n${formatted}` }] }
       }
 
       case 'cross_team_delegate': {

@@ -64,6 +64,16 @@ export async function runAgent(
     ? `${systemPrompt}\n\n---\nMission ID: ${missionId}\nArtifacts directory: ${artifactsDir}\nSave ALL output files to the artifacts directory above.\nTask: ${prompt}`
     : `Mission ID: ${missionId}\nArtifacts directory: ${artifactsDir}\nSave ALL output files to the artifacts directory above.\nTask: ${prompt}`
 
+  // Check for unread messages and append hint
+  let finalPrompt = fullPrompt
+  try {
+    const res = await fetch(`http://localhost:3001/api/channels/unread/${agentId}`)
+    const unread = await res.json()
+    if (Array.isArray(unread) && unread.length > 0) {
+      finalPrompt += `\n\nYou have ${unread.length} unread message(s). Use read_messages() to check them before starting work.`
+    }
+  } catch {}
+
   broadcast('agent:start', { agentId, missionId, workspace: cwd })
 
   let cmd: string[]
@@ -71,7 +81,7 @@ export async function runAgent(
   if (driver.type === 'claude-code') {
     // Build args, replacing {{full_prompt}} placeholder
     const args = (driver.args as string[]).map((a: string) =>
-      a.replace('{{full_prompt}}', fullPrompt).replace('{{prompt}}', prompt)
+      a.replace('{{full_prompt}}', finalPrompt).replace('{{prompt}}', prompt)
     )
 
     // Inject session flags
@@ -87,7 +97,7 @@ export async function runAgent(
   } else if (driver.type === 'cli') {
     // Legacy opencode-style
     const args = (driver.args as string[]).map((a: string) =>
-      a.replace('{{prompt}}', fullPrompt)
+      a.replace('{{prompt}}', finalPrompt)
     )
     if (driver.command === 'opencode' && (options.sessionId || options.resume)) {
       const sessionFlags = options.sessionId ? ['-s', options.sessionId] : ['-c']
@@ -97,7 +107,7 @@ export async function runAgent(
       cmd = [driver.command, ...args]
     }
   } else {
-    cmd = ['claude', '--dangerously-skip-permissions', '-p', fullPrompt]
+    cmd = ['claude', '--dangerously-skip-permissions', '-p', finalPrompt]
   }
 
   const proc = Bun.spawn(cmd, {
