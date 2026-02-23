@@ -56,6 +56,25 @@ type Task = {
   feedback: Array<{ text: string; at: string }>
 }
 
+type Channel = {
+  id: string
+  name: string
+  type: 'org' | 'team' | 'direct'
+  messageCount?: number
+  lastActivity?: string
+  participants?: string[]
+}
+
+type ChatMessage = {
+  id: string
+  channel: string
+  from: string
+  text: string
+  replyTo: string | null
+  mentions: string[]
+  ts: string
+}
+
 type LogLine = {
   id: number
   agentId: string
@@ -175,13 +194,17 @@ function formatMessageTime(ts: string) {
 }
 
 export default function App() {
-  const [tab, setTab] = useState<'tasks' | 'inbox' | 'agents'>('tasks')
+  const [tab, setTab] = useState<'tasks' | 'inbox' | 'agents' | 'chat'>('tasks')
   const [agents, setAgents] = useState<Agent[]>([])
   const [missions, setMissions] = useState<Mission[]>([])
   const [messages, setMessages] = useState<Message[]>([])
   const [logs, setLogs] = useState<LogLine[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
   const [teams, setTeams] = useState<Team[]>([])
+  const [channels, setChannels] = useState<Channel[]>([])
+  const [selectedChannel, setSelectedChannel] = useState<string | null>(null)
+  const [channelMessages, setChannelMessages] = useState<ChatMessage[]>([])
+  const [expandedThreads, setExpandedThreads] = useState<Set<string>>(new Set())
   const [expandedDept, setExpandedDept] = useState<string | null>(null)
   const [newTitle, setNewTitle] = useState('')
   const [showQuickAdd, setShowQuickAdd] = useState(false)
@@ -209,6 +232,7 @@ export default function App() {
   const [pushBackText, setPushBackText] = useState('')
 
   const logScrollRef = useRef<HTMLDivElement>(null)
+  const chatScrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     fetch('/api/agents')
@@ -228,12 +252,18 @@ export default function App() {
     fetch('/api/messages').then((r) => r.json()).then(setMessages).catch(console.error)
     fetch('/api/tasks').then((r) => r.json()).then(setTasks).catch(console.error)
     fetch('/api/teams').then((r) => r.json()).then(setTeams).catch(console.error)
+    fetch('/api/channels').then((r) => r.json()).then(setChannels).catch(console.error)
   }, [])
 
   useEffect(() => {
     if (!logScrollRef.current) return
     logScrollRef.current.scrollTop = logScrollRef.current.scrollHeight
   }, [logs])
+
+  useEffect(() => {
+    if (!chatScrollRef.current) return
+    chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight
+  }, [channelMessages])
 
   function appendLog(agentId: string, missionId: string, text: string, kind: LogLine['kind']) {
     setLogs((p) => [...p.slice(-500), { id: logId++, agentId, missionId, text, kind }])
@@ -345,6 +375,34 @@ export default function App() {
     }
     if (event === 'team:deleted') {
       setTeams((p) => p.filter((t) => t.id !== d.id))
+    }
+
+    // Chat events
+    if (event === 'chat:message') {
+      const { channel, message: chatMsg } = data as { channel: string; message: ChatMessage }
+      // Update channel messages if viewing this channel
+      setChannelMessages((p) => {
+        if (p.length === 0) return p
+        if (p[0]?.channel !== channel) return p
+        return [...p, chatMsg]
+      })
+      // Update channel list metadata
+      setChannels((p) =>
+        p.map((ch) =>
+          ch.id === channel
+            ? { ...ch, messageCount: (ch.messageCount ?? 0) + 1, lastActivity: chatMsg.ts }
+            : ch
+        )
+      )
+      appendLog('chat', '', `[chat] ${chatMsg.from} → #${channel}: ${chatMsg.text.slice(0, 80)}`, 'system')
+    }
+
+    if (event === 'chat:channel_created') {
+      const ch = data as unknown as Channel
+      setChannels((p) => {
+        if (p.find((c) => c.id === ch.id)) return p
+        return [...p, { ...ch, messageCount: 0, lastActivity: ch.lastActivity ?? new Date().toISOString() }]
+      })
     }
   })
 
@@ -494,6 +552,13 @@ export default function App() {
     setPushBackText('')
   }
 
+  async function selectChannel(channelId: string) {
+    setSelectedChannel(channelId)
+    const res = await fetch(`/api/channels/${channelId}/messages?limit=100`)
+    const msgs = await res.json()
+    setChannelMessages(msgs)
+  }
+
   const missionsByStage = STAGES.reduce((acc, stage) => {
     acc[stage] = missions.filter((m) => m.current_stage === stage && !m.parent_mission)
     return acc
@@ -627,7 +692,7 @@ export default function App() {
           </div>
 
           <div className="mt-4 flex flex-wrap items-center gap-2">
-            {(['tasks', 'inbox', 'agents'] as const).map((t) => (
+            {(['tasks', 'inbox', 'agents', 'chat'] as const).map((t) => (
               <button key={t} onClick={() => setTab(t)} className={`tab-chip ${tab === t ? 'active' : ''}`}>
                 {t}
                 {t === 'inbox' && pendingMessages.length > 0 ? ` (${pendingMessages.length})` : ''}
@@ -915,6 +980,118 @@ export default function App() {
                     })}
                   </div>
                 </section>
+              </div>
+            )}
+
+            {tab === 'chat' && (
+              <div className="flex min-h-full flex-col lg:flex-row gap-3">
+                {/* Channel sidebar */}
+                <div className="panel animate-rise w-full lg:w-56 shrink-0 p-3">
+                  <div className="section-label mb-2">Channels</div>
+                  <div className="space-y-1">
+                    {channels.length === 0 && (
+                      <p className="text-xs text-[var(--text-muted)]">No channels yet.</p>
+                    )}
+                    {channels.map((ch) => (
+                      <button
+                        key={ch.id}
+                        onClick={() => selectChannel(ch.id)}
+                        className={`w-full rounded-lg px-3 py-2 text-left text-sm transition-colors ${
+                          selectedChannel === ch.id
+                            ? 'bg-[#e2f0e8] text-[#1e3127] font-semibold'
+                            : 'text-[#4a6355] hover:bg-[#f4f9f5]'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="truncate">{ch.name}</span>
+                          {(ch.messageCount ?? 0) > 0 && (
+                            <span className="rounded-full bg-white/80 px-1.5 py-0.5 text-[10px] font-semibold text-[#55695f]">
+                              {ch.messageCount}
+                            </span>
+                          )}
+                        </div>
+                        {ch.lastActivity && (
+                          <p className="mt-0.5 text-[10px] text-[#8a9e91]">{formatMessageTime(ch.lastActivity)}</p>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Message timeline */}
+                <div className="panel animate-rise flex min-h-0 flex-1 flex-col p-0">
+                  {!selectedChannel ? (
+                    <div className="flex flex-1 items-center justify-center text-sm text-[var(--text-muted)]">
+                      Select a channel to view messages
+                    </div>
+                  ) : (
+                    <>
+                      <div className="border-b border-[var(--line-soft)] px-4 py-3">
+                        <span className="font-semibold text-[#1e3127]">
+                          {channels.find((c) => c.id === selectedChannel)?.name ?? `#${selectedChannel}`}
+                        </span>
+                      </div>
+
+                      <div ref={chatScrollRef} className="min-h-0 flex-1 overflow-y-auto p-4 space-y-3">
+                        {channelMessages.length === 0 && (
+                          <p className="text-center text-sm text-[var(--text-muted)] mt-8">No messages yet. Start the conversation!</p>
+                        )}
+
+                        {channelMessages
+                          .filter((m) => !m.replyTo)
+                          .map((msg) => {
+                            const replies = channelMessages.filter((r) => r.replyTo === msg.id)
+                            const isExpanded = expandedThreads.has(msg.id)
+
+                            return (
+                              <div key={msg.id} className="group">
+                                <div className={`rounded-xl px-3.5 py-2.5 ${msg.from === 'chairman' ? 'bg-[#fdf8ec] border border-[#e9dcaa]' : 'bg-[#f4f9f5] border border-[#d8e6dc]'}`}>
+                                  <div className="flex items-center gap-2 text-xs">
+                                    <span className="font-bold text-[#26372d]">{msg.from}</span>
+                                    <span className="text-[#8a9e91]">{formatMessageTime(msg.ts)}</span>
+                                    {msg.mentions.length > 0 && (
+                                      <span className="text-[#5a8a6a]">@{msg.mentions.join(' @')}</span>
+                                    )}
+                                  </div>
+                                  <p className="mt-1 text-sm leading-relaxed text-[#2b3a31] whitespace-pre-wrap">{msg.text}</p>
+
+                                  {replies.length > 0 && (
+                                    <button
+                                      onClick={() =>
+                                        setExpandedThreads((prev) => {
+                                          const next = new Set(prev)
+                                          if (next.has(msg.id)) next.delete(msg.id)
+                                          else next.add(msg.id)
+                                          return next
+                                        })
+                                      }
+                                      className="mt-1.5 text-xs font-semibold text-[#4a8a5e] hover:text-[#2d6040]"
+                                    >
+                                      {isExpanded ? 'Hide' : `${replies.length}`} {replies.length === 1 ? 'reply' : 'replies'}
+                                    </button>
+                                  )}
+                                </div>
+
+                                {isExpanded && replies.length > 0 && (
+                                  <div className="ml-6 mt-1 space-y-1.5 border-l-2 border-[#d8e6dc] pl-3">
+                                    {replies.map((reply) => (
+                                      <div key={reply.id} className="rounded-lg bg-[#f8fdf9] border border-[#e4efe7] px-3 py-2">
+                                        <div className="flex items-center gap-2 text-xs">
+                                          <span className="font-bold text-[#26372d]">{reply.from}</span>
+                                          <span className="text-[#8a9e91]">{formatMessageTime(reply.ts)}</span>
+                                        </div>
+                                        <p className="mt-0.5 text-sm leading-relaxed text-[#2b3a31] whitespace-pre-wrap">{reply.text}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })}
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
             )}
           </main>
