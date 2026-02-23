@@ -3,6 +3,7 @@ import { readdir, readFile, writeFile, mkdir, rm } from 'fs/promises'
 import { join } from 'path'
 import { existsSync } from 'fs'
 import { broadcast } from '../lib/hub'
+import { autoDispatch } from '../lib/AutoDispatch'
 
 export const taskRoutes = new Hono()
 
@@ -67,4 +68,41 @@ taskRoutes.delete('/:id', async (c) => {
   await rm(taskDir, { recursive: true })
   broadcast('task:deleted', { id })
   return c.json({ ok: true })
+})
+
+taskRoutes.post('/:id/dispatch', async (c) => {
+  const id = c.req.param('id')
+  const statePath = join(TASKS_DIR, id, 'state.json')
+  if (!existsSync(statePath)) return c.json({ error: 'not found' }, 404)
+
+  const state = JSON.parse(await readFile(statePath, 'utf-8'))
+  const body = await c.req.json().catch(() => ({}))
+
+  // Update task to in_progress immediately
+  state.status = 'in_progress'
+  await writeFile(statePath, JSON.stringify(state, null, 2))
+  broadcast('task:updated', state)
+
+  // Fire-and-forget dispatch
+  autoDispatch(id, state.title, body.workspace)
+    .then(async (result) => {
+      // Write dispatch result back to task state
+      const fresh = JSON.parse(await readFile(statePath, 'utf-8'))
+      fresh.mission_id = result.missionId
+      fresh.assigned_to = result.executiveId
+      fresh.routing_reasoning = result.reasoning
+      await writeFile(statePath, JSON.stringify(fresh, null, 2))
+      broadcast('task:updated', fresh)
+    })
+    .catch(async (err) => {
+      // Revert task to backlog on failure
+      const fresh = JSON.parse(await readFile(statePath, 'utf-8'))
+      fresh.status = 'backlog'
+      fresh.dispatch_error = err.message
+      await writeFile(statePath, JSON.stringify(fresh, null, 2))
+      broadcast('task:updated', fresh)
+      broadcast('dispatch:error', { taskId: id, message: err.message })
+    })
+
+  return c.json({ ok: true, taskId: id, status: 'dispatching' })
 })
