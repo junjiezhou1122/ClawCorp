@@ -1,3 +1,5 @@
+<h1 align="center">ClawCorp</h1>
+
 <p align="center">
   <img src="https://img.shields.io/badge/status-active-brightgreen" alt="Status" />
   <img src="https://img.shields.io/badge/runtime-Bun-f9f1e1?logo=bun" alt="Bun" />
@@ -5,8 +7,6 @@
   <img src="https://img.shields.io/badge/protocol-MCP-blue" alt="MCP" />
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License" />
 </p>
-
-<h1 align="center">ClawCorp</h1>
 
 <p align="center">
   <strong>An autonomous AI organization you command as Chairman.</strong><br/>
